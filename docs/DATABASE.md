@@ -57,12 +57,45 @@ survives would strand an authenticated user with no profile and no route back.
   runs where the caller has no rights on `public.profiles`. It takes no caller-supplied
   arguments and writes only the row for the user being created.
 
+### Onboarding preferences — migration `20260824120000_onboarding_preferences.sql`
+
+Three tables rather than one JSON blob, because they have different relational futures
+(spec §78).
+
+**`public.user_preferences`** — one row per user.
+
+| Column                  | Type                                  | Notes                                                                                                                |
+| ----------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `user_id`               | `uuid` PK                             | FK → `auth.users(id)` cascade                                                                                        |
+| `bowel_pattern`         | `text`                                | `mostly_loose` \| `mostly_constipated` \| `mixed` \| `varies` \| `unsure`. Never mapped to an IBS subtype (spec §26) |
+| `goals`                 | `text[]` not null, default `{}`       | Personalization only; nothing joins to it, so an array is the right shape                                            |
+| `keep_meal_photos`      | `boolean` not null, default **false** | Opt-in retention (spec §93)                                                                                          |
+| `analytics_consent`     | `boolean` not null, default **false** |                                                                                                                      |
+| `ai_processing_consent` | `boolean` not null, default **false** |                                                                                                                      |
+
+Every privacy-affecting flag defaults to **false**. The app must be fully usable with all of
+them off (spec §94), so nothing opts the user in on their behalf.
+
+**`public.user_symptom_preferences`** — `(user_id, symptom_type)`, one row per tracked symptom.
+Normalized because `symptom_logs` will share the same vocabulary. A tracking preference, not a
+diagnosis (spec §25).
+
+**`public.user_suspected_factors`** — `(user_id, factor_key)`, with `custom_label` for
+user-defined factors. A check constraint enforces that a `custom:` key carries a label and a
+catalogue key does not, so the pattern engine can never receive a factor it cannot name. These
+are hypotheses to examine, never findings.
+
+Symptom preferences and suspected factors are **deletable** by their owner — unlike `profiles`,
+these are user-managed content rather than account identity.
+
 ---
 
 ## 3. Security verification
 
-`supabase/tests/rls_profiles.sql` is a self-contained, repeatable isolation test. It creates
-two users, then asserts as user A that they:
+`supabase/tests/rls_isolation.sql` is a self-contained, repeatable isolation test covering
+**every** user-owned table. A new table without an entry here is unfinished.
+
+It creates two users, then asserts as user A that they:
 
 1. see exactly one profile row (their own);
 2. cannot read user B's row;
@@ -70,16 +103,18 @@ two users, then asserts as user A that they:
 4. cannot delete any row (no DELETE policy exists);
 5. cannot insert a row owned by user B;
 6. **can** update their own row;
-7. cannot set `updated_at` themselves — the trigger overrides it;
+7. cannot set `updated_at` themselves - the trigger overrides it;
 
-and finally that an anonymous client sees nothing at all.
+and, for each preference table, that user A sees only their own rows, cannot read, delete or
+insert on behalf of user B, and that a custom factor without a label is rejected. Finally, that
+an anonymous client sees nothing at all in any table.
 
 ```bash
-psql "$DATABASE_URL" -f supabase/tests/rls_profiles.sql
+psql "$DATABASE_URL" -f supabase/tests/rls_isolation.sql
 ```
 
-Executed against the live project on 2026-08-24: **all checks passed**, fixtures removed,
-`get_advisors(security)` returned no findings.
+Executed against the live project on 2026-08-24 after each migration: **all checks passed**,
+fixtures removed, `get_advisors(security)` returned no findings.
 
 > Note for whoever edits this test: `updated_at > created_at` cannot be asserted inside a
 > single transaction, because `now()` is the transaction timestamp and both values are equal.

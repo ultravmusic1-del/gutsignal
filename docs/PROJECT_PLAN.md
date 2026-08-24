@@ -1,6 +1,6 @@
 # GutSignal — Project Plan
 
-**Status:** Milestones 0–3 implemented — physical-device verification pending
+**Status:** Milestones 0–4 implemented — physical-device verification pending
 **Author:** Claude Code (principal engineer role)
 **Created:** 2026-08-24
 **Last updated:** 2026-08-24
@@ -35,7 +35,7 @@ test/lint harness) has since been added; see §12.1 for what is and is not done.
 | Resource                   | Installed?                                   | Notes                                                                                                                                                                                                                                                             |
 | -------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Supabase agent skills      | **Yes** (vendored in `.agents/skills/`)      | `supabase`, `supabase-postgres-best-practices`. Use for RLS, migrations, Edge Functions, Postgres performance.                                                                                                                                                    |
-| Supabase MCP server        | Yes (session tools)                          | Can list projects/tables, apply migrations, run advisors. Not yet pointed at a GutSignal project.                                                                                                                                                                 |
+| Supabase MCP server        | Yes (session tools)                          | Connected to project mrqxmkxhyohlywiziofz. Used to apply migrations, run the RLS isolation test and check security advisors.                                                                                                                                                                 |
 | Expo skills                | Available but **not yet consulted**          | Loading the Expo skill was declined in this session. All Expo/EAS facts below were instead verified against the npm registry (see §1). **Recommendation: allow the Expo skill before Milestone 1**, since it is the correct authority for EAS workflow specifics. |
 | RevenueCat skills / MCP    | Skills listed; **MCP requires OAuth**        | The RevenueCat MCP server is unauthenticated in this session. Owner must authorize it (or supply dashboard config) before Milestone 12.                                                                                                                           |
 | Software Mansion RN skills | Listed (`react-native-best-practices`, etc.) | Use during Milestones 2, 6, 17 (animation, gestures, performance).                                                                                                                                                                                                |
@@ -688,15 +688,15 @@ physical iPhone" — is unverified. Nothing has been seen on a device yet.
 
 Supabase project `mrqxmkxhyohlywiziofz` is live and carries the first migration.
 
-| Area         | Delivered                                                                                                                                                  |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Area         | Delivered                                                                                                                                                                                           |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Schema       | `public.profiles` with RLS, a sign-up trigger that creates the row, and a server-side `updated_at` trigger. Helpers live in a `private` schema with execute revoked. See [DATABASE.md](DATABASE.md) |
-| Security     | Isolation test in `supabase/tests/rls_profiles.sql` — run against the live project, all checks passed, fixtures removed, security advisors clean            |
-| Auth service | Apple and email one-time code sign-in, sign-out, session restore. Returns typed results; provider error strings are never shown raw                        |
-| Session      | `AuthProvider` subscribes to `onAuthStateChange` and binds token refresh to app foreground state                                                            |
-| Screens      | Welcome (dark hero), sign-in, email entry (React Hook Form + Zod), code verification with resend cooldown                                                  |
-| Routing      | The boot gate waits for session restore, then routes once — unauthenticated to welcome, authenticated to the tabs                                          |
-| Sign-out     | Real, confirmed, and reachable from You                                                                                                                    |
+| Security     | Isolation test in `supabase/tests/rls_profiles.sql` — run against the live project, all checks passed, fixtures removed, security advisors clean                                                    |
+| Auth service | Apple and email one-time code sign-in, sign-out, session restore. Returns typed results; provider error strings are never shown raw                                                                 |
+| Session      | `AuthProvider` subscribes to `onAuthStateChange` and binds token refresh to app foreground state                                                                                                    |
+| Screens      | Welcome (dark hero), sign-in, email entry (React Hook Form + Zod), code verification with resend cooldown                                                                                           |
+| Routing      | The boot gate waits for session restore, then routes once — unauthenticated to welcome, authenticated to the tabs                                                                                   |
+| Sign-out     | Real, confirmed, and reachable from You                                                                                                                                                             |
 
 **Owner action required:** enable the Apple provider in the Supabase dashboard (see
 [DATABASE.md](DATABASE.md) §4). Until then Sign in with Apple fails on a real device — handled
@@ -704,6 +704,25 @@ gracefully with a message pointing at email sign-in, but not functional.
 
 **Not verified:** no sign-in has been performed on a device. The email flow is verified only as
 far as the auth endpoint accepting the project credentials.
+
+### 12.4 Milestone 4 status (2026-08-24)
+
+| Area         | Delivered                                                                                                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema       | `user_preferences`, `user_symptom_preferences`, `user_suspected_factors` — three tables, not one blob, with privacy flags defaulting to false                                                     |
+| Security     | `supabase/tests/rls_isolation.sql` now covers every user-owned table; run against the live project, all checks passed, advisors clean                                                             |
+| Vocabularies | `src/domain/onboarding/options.ts` holds the shared keys; a test reads the migration files and asserts the app's keys match the database check constraints exactly                                |
+| Draft        | In-memory Zustand store — nothing about symptoms or suspected foods touches disk before the user has an account (ADR-0028)                                                                        |
+| Screens      | Goals, symptoms, bowel pattern, suspected factors (with custom entry), tracking style, philosophy with acknowledgement, account, completion                                                       |
+| Persistence  | One mutation writes preferences, symptoms and factors, then sets `onboarding_completed_at` **last**, so a partial failure returns the user to onboarding rather than into a half-personalized app |
+| Routing      | The boot gate reads the profile and sends users with unfinished onboarding back into it — but an _unreadable_ profile falls through to the app, so a bad connection cannot trap a returning user  |
+
+**Deviation from spec §19:** the Apple Health pre-permission screen is not in this flow. It
+ships with HealthKit in Milestone 13, where it can actually request the permission — see
+ADR-0029.
+
+**Not verified:** no one has completed onboarding on a device. The flow is verified by unit
+tests, the database is verified directly, but the two have never met.
 
 Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md`,
 `TEST_PLAN.md`, `AI_ARCHITECTURE.md` (M7), `PATTERN_ENGINE.md` (M8),

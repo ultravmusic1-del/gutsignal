@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useAppBoot, type BootFailureKind } from '@/boot/useAppBoot';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useProfile } from '@/features/profile/useProfile';
 import { Card, Screen, Text } from '@/components/ui';
 import { useTheme } from '@/theme';
 
@@ -11,12 +12,12 @@ import { useTheme } from '@/theme';
  * (spec §20) — which is what prevents the auth/navigation flicker of deciding routes inside
  * several providers.
  *
- * Order matters: configuration, then session restore, then route. Onboarding joins the chain
- * in Milestone 4, keyed on `profiles.onboarding_completed_at`.
+ * Order matters: configuration, then session restore, then profile, then route.
  */
 export default function BootGate() {
   const boot = useAppBoot();
   const auth = useAuth();
+  const profile = useProfile();
 
   if (boot.state === 'booting') {
     // Deliberately blank: the native splash is still up, and rendering a second loading
@@ -38,7 +39,22 @@ export default function BootGate() {
     return <Redirect href="/(auth)/welcome" />;
   }
 
-  // Milestone 4 adds the onboarding branch here, keyed on profiles.onboarding_completed_at.
+  if (profile.isPending) {
+    return <Screen />;
+  }
+
+  // A profile that says onboarding is unfinished sends the user back into it.
+  //
+  // A profile we could NOT read does not: an unreachable network on launch must not trap a
+  // returning user in onboarding they already completed. Personalization is worth less than
+  // access to their own logs, so an unreadable profile falls through to the app.
+  const needsOnboarding =
+    profile.data?.ok === true && profile.data.profile.onboarding_completed_at === null;
+
+  if (needsOnboarding) {
+    return <Redirect href="/(onboarding)" />;
+  }
+
   return <Redirect href="/(tabs)/today" />;
 }
 

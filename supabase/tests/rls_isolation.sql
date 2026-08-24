@@ -1,15 +1,17 @@
--- GutSignal — RLS isolation test: public.profiles
+-- GutSignal — RLS isolation test: every user-owned table
 --
 -- Spec §91 and CLAUDE.md §58: a missing or broken RLS policy is a RELEASE BLOCKER. This test
 -- proves, in the database itself, that user A cannot read, update, delete or impersonate
--- user B. It is written as plain SQL with assertions rather than pgTAP so it can be run
--- without Docker from a Windows host — via the Supabase SQL editor, psql, or CI.
+-- user B — for EVERY user-owned table. A new table without an entry here is unfinished.
+--
+-- Written as plain SQL with assertions rather than pgTAP so it can be run without Docker from
+-- a Windows host — via the Supabase SQL editor, psql, or CI.
 --
 -- It is self-contained: it creates its own fixtures and removes them, including on failure
 -- paths, so it can be run repeatedly against a non-production project.
 --
--- Run:  psql "$DATABASE_URL" -f supabase/tests/rls_profiles.sql
--- Pass: final notice reads "RLS profiles: ALL CHECKS PASSED"
+-- Run:  psql "$DATABASE_URL" -f supabase/tests/rls_isolation.sql
+-- Pass: final notice reads "RLS isolation: ALL CHECKS PASSED"
 -- Fail: raises an exception naming the check that failed
 
 begin;
@@ -22,6 +24,7 @@ declare
   affected_count     integer;
   insert_was_blocked boolean := false;
   delete_was_blocked boolean := false;
+  table_name         text;
 begin
   -- ---------------------------------------------------------------------
   -- Fixtures. Inserting into auth.users also exercises the sign-up trigger.
@@ -122,18 +125,112 @@ begin
     raise exception 'FAILED: the client was able to set updated_at directly';
   end if;
 
+  -- =====================================================================
+  -- Onboarding preference tables (migration 20260824120000)
+  --
+  -- Seeded as the superuser so both users own rows, then read back as user A.
+  -- =====================================================================
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', null, true);
+
+  insert into public.user_preferences (user_id, bowel_pattern, goals)
+  values (user_a, 'mixed', array['triggers']), (user_b, 'varies', array['bowel_patterns']);
+
+  insert into public.user_symptom_preferences (user_id, symptom_type)
+  values (user_a, 'bloating'), (user_b, 'urgency');
+
+  insert into public.user_suspected_factors (user_id, factor_key)
+  values (user_a, 'coffee'), (user_b, 'dairy');
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', user_a, 'role', 'authenticated')::text,
+    true
+  );
+
+  foreach table_name in array array[
+    'user_preferences', 'user_symptom_preferences', 'user_suspected_factors'
+  ]
+  loop
+    -- Reads are limited to the caller's own rows.
+    execute format('select count(*) from public.%I', table_name) into visible_count;
+    if visible_count <> 1 then
+      raise exception 'FAILED: user A sees % rows in %, expected only their own',
+        visible_count, table_name;
+    end if;
+
+    execute format('select count(*) from public.%I where user_id = $1', table_name)
+      into visible_count using user_b;
+    if visible_count <> 0 then
+      raise exception 'FAILED: user A can read user B''s rows in %', table_name;
+    end if;
+
+    -- Deletes cannot reach another user's rows.
+    execute format('delete from public.%I where user_id = $1', table_name) using user_b;
+    get diagnostics affected_count = row_count;
+    if affected_count <> 0 then
+      raise exception 'FAILED: user A deleted % rows from % belonging to user B',
+        affected_count, table_name;
+    end if;
+  end loop;
+
+  -- Writes cannot be attributed to another user.
+  insert_was_blocked := false;
+  begin
+    insert into public.user_symptom_preferences (user_id, symptom_type) values (user_b, 'nausea');
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: user A inserted a symptom preference owned by user B';
+  end if;
+
+  insert_was_blocked := false;
+  begin
+    insert into public.user_suspected_factors (user_id, factor_key) values (user_b, 'alcohol');
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: user A inserted a suspected factor owned by user B';
+  end if;
+
+  insert_was_blocked := false;
+  begin
+    insert into public.user_preferences (user_id, bowel_pattern) values (user_b, 'unsure');
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: user A inserted preferences owned by user B';
+  end if;
+
+  -- The custom-factor constraint is a data-integrity rule, not an RLS rule, but it protects
+  -- the engine from factors with no label — so it is asserted here too.
+  insert_was_blocked := false;
+  begin
+    insert into public.user_suspected_factors (user_id, factor_key) values (user_a, 'custom:kefir');
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: a custom factor was accepted without a label';
+  end if;
+
   -- ---------------------------------------------------------------------
   -- Act as an unauthenticated client.
   -- ---------------------------------------------------------------------
   perform set_config('role', 'anon', true);
   perform set_config('request.jwt.claims', null, true);
 
-  select count(*) into visible_count from public.profiles;
-  if visible_count <> 0 then
-    raise exception 'FAILED: anonymous clients can read % profile rows', visible_count;
-  end if;
+  foreach table_name in array array[
+    'profiles', 'user_preferences', 'user_symptom_preferences', 'user_suspected_factors'
+  ]
+  loop
+    execute format('select count(*) from public.%I', table_name) into visible_count;
+    if visible_count <> 0 then
+      raise exception 'FAILED: anonymous clients can read % rows in %', visible_count, table_name;
+    end if;
+  end loop;
 
-  raise notice 'RLS profiles: ALL CHECKS PASSED';
+  raise notice 'RLS isolation: ALL CHECKS PASSED';
 end;
 $$;
 

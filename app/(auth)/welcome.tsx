@@ -39,7 +39,7 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
-          <Button label="Get started" onPress={() => router.push('/(auth)/sign-in')} />
+          <Button label="Get started" onPress={() => router.push('/(onboarding)')} />
           <Button
             label="I already have an account"
             variant="ghostOnInverse"

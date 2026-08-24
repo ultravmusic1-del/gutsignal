@@ -564,3 +564,52 @@ and copy remain verifiable on Windows through unit and React Native Testing Libr
 than failing, the app sat on a blank screen indefinitely with nothing to act on. Boot steps are
 now bounded by a timeout, and a storage failure reports different copy from a configuration
 failure — the fix outlived the tool that found it.
+
+---
+
+## ADR-0028 — Onboarding questions come before account creation
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** Milestone 3 shipped a boot gate that sent unauthenticated users straight to
+sign-in. Milestone 4 had to place the onboarding questions somewhere relative to that.
+
+**Alternatives considered.** (a) Account first, then onboarding — simplest, because every
+answer can be written to the database as it is given. (b) Questions first, account last, which
+is the order the specification's own route list uses (§19: `philosophy` then `account`).
+
+**Reason.** Someone who has just been asked what their symptoms are, what they suspect, and how
+much effort they want to spend has invested a minute in describing their situation. Asking for
+an account at that point is a much smaller step than asking a stranger to sign up before
+seeing anything. It also means an abandoned onboarding leaves no account and no half-formed
+profile behind.
+
+**Consequences.** Answers live in an in-memory Zustand draft until the final step writes them,
+so nothing about a user's symptoms or suspected foods touches disk before they have an account.
+The trade is that killing the app mid-onboarding loses the answers; that is a few screens of
+re-tapping, and it is the right side of the trade for a health app. The draft store is reset
+after a successful save so a second account on the same device never inherits the first
+account's answers — there is a test for exactly that.
+
+---
+
+## ADR-0029 — The HealthKit pre-permission screen ships with HealthKit, not before it
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** Spec §31 places an Apple Health pre-permission screen inside onboarding, between
+account creation and completion. HealthKit itself is Milestone 13.
+
+**Alternatives considered.** (a) Ship the screen now with a disabled "Connect Apple Health"
+button. (b) Ship the screen now with a button that silently does nothing.
+
+**Reason.** (b) is the dead button the spec forbids outright. (a) puts a disabled primary
+action in the middle of the happy path, which reads as a broken app rather than a considered
+one — and the screen's entire purpose is to earn a permission grant it currently cannot
+request.
+
+**Consequences.** Onboarding is `goals → symptoms → bowel-pattern → suspected-factors →
+tracking-style → philosophy → account → complete`. Milestone 13 inserts the pre-permission
+screen before `complete`, where it will be fully functional, and the progress indicator will
+gain a step. Recorded here so the deviation from §19's route list is deliberate and traceable
+rather than an omission.
