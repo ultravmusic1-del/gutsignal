@@ -27,6 +27,8 @@ declare
   table_name         text;
   log_a uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   log_b uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  meal_a uuid := 'aaaa1111-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  meal_b uuid := 'bbbb2222-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 begin
   -- ---------------------------------------------------------------------
   -- Fixtures. Inserting into auth.users also exercises the sign-up trigger.
@@ -343,6 +345,130 @@ begin
     raise exception 'FAILED: the client was able to set symptom_logs.updated_at directly';
   end if;
 
+  -- =====================================================================
+  -- Meals (migrations 20260824170000, 20260824170100)
+  --
+  -- Meals are an aggregate written through public.upsert_meals, so this section checks the
+  -- function as well as the tables. Two threats are specific to this shape:
+  --
+  --   * the RPC is a transaction boundary, NOT a privilege escalation — it is security
+  --     invoker, so it must be unable to do anything the caller could not already do
+  --   * a composite foreign key ties each child to its parent's owner, so items cannot be
+  --     attached to someone else's meal even by bypassing the function entirely
+  -- =====================================================================
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', null, true);
+
+  insert into public.meal_logs (id, user_id, title, meal_size, occurred_at,
+    occurred_local_date, occurred_tz, occurred_utc_offset_minutes)
+  values (meal_b, user_b, 'B lunch', 'medium', now(), current_date, 'UTC', 0);
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', user_a, 'role', 'authenticated')::text,
+    true
+  );
+
+  -- 1. The aggregate lands whole, in one call.
+  perform public.upsert_meals(jsonb_build_array(jsonb_build_object(
+    'id', meal_a, 'user_id', user_a, 'title', 'Shawarma', 'meal_size', 'large',
+    'occurred_at', now(), 'occurred_local_date', current_date,
+    'occurred_tz', 'Europe/London', 'occurred_utc_offset_minutes', 60,
+    'items', jsonb_build_array(
+      jsonb_build_object('id', gen_random_uuid(), 'raw_name', 'chicken', 'position', 0),
+      jsonb_build_object('id', gen_random_uuid(), 'raw_name', 'flatbread', 'position', 1)),
+    'tags', jsonb_build_array('restaurant', 'spicy'))));
+
+  select count(*) into visible_count from public.meal_items where meal_id = meal_a;
+  if visible_count <> 2 then
+    raise exception 'FAILED: the meal aggregate landed with % items, expected 2', visible_count;
+  end if;
+
+  -- 2. Re-upserting replaces the contents rather than accumulating them.
+  perform public.upsert_meals(jsonb_build_array(jsonb_build_object(
+    'id', meal_a, 'user_id', user_a, 'title', 'Shawarma', 'meal_size', 'large',
+    'occurred_at', now(), 'occurred_local_date', current_date,
+    'occurred_tz', 'Europe/London', 'occurred_utc_offset_minutes', 60,
+    'items', jsonb_build_array(
+      jsonb_build_object('id', gen_random_uuid(), 'raw_name', 'chicken', 'position', 0)),
+    'tags', jsonb_build_array('restaurant'))));
+
+  select count(*) into visible_count from public.meal_items where meal_id = meal_a;
+  if visible_count <> 1 then
+    raise exception 'FAILED: replacing the aggregate left % items, expected 1', visible_count;
+  end if;
+
+  -- 3. SELECT isolation across all three tables.
+  select count(*) into visible_count from public.meal_logs;
+  if visible_count <> 1 then
+    raise exception 'FAILED: user A sees % meals, expected only their own', visible_count;
+  end if;
+
+  select count(*) into visible_count from public.meal_items where user_id = user_b;
+  if visible_count <> 0 then
+    raise exception 'FAILED: user A can read user B''s meal items';
+  end if;
+
+  -- 4. The RPC cannot create a meal owned by someone else.
+  insert_was_blocked := false;
+  begin
+    perform public.upsert_meals(jsonb_build_array(jsonb_build_object(
+      'id', gen_random_uuid(), 'user_id', user_b, 'title', 'impersonated',
+      'meal_size', 'small', 'occurred_at', now(), 'occurred_local_date', current_date,
+      'occurred_tz', 'UTC', 'occurred_utc_offset_minutes', 0)));
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: the RPC wrote a meal owned by user B';
+  end if;
+
+  -- 5. The RPC cannot land on user B's existing meal.
+  insert_was_blocked := false;
+  begin
+    perform public.upsert_meals(jsonb_build_array(jsonb_build_object(
+      'id', meal_b, 'user_id', user_a, 'title', 'hijacked', 'meal_size', 'small',
+      'occurred_at', now(), 'occurred_local_date', current_date,
+      'occurred_tz', 'UTC', 'occurred_utc_offset_minutes', 0)));
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: the RPC upserted onto user B''s meal';
+  end if;
+
+  -- 6. The composite foreign key holds even when the function is bypassed entirely.
+  insert_was_blocked := false;
+  begin
+    insert into public.meal_items (id, meal_id, user_id, raw_name)
+    values (gen_random_uuid(), meal_b, user_a, 'smuggled');
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: an item was attached to user B''s meal by writing the table directly';
+  end if;
+
+  -- 7. User B's meal is untouched by any of it.
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', null, true);
+
+  select count(*) into visible_count from public.meal_items where meal_id = meal_b;
+  if visible_count <> 0 then
+    raise exception 'FAILED: user B''s meal gained % items', visible_count;
+  end if;
+
+  select count(*) into visible_count
+  from public.meal_logs where id = meal_b and title = 'B lunch';
+  if visible_count <> 1 then
+    raise exception 'FAILED: user B''s meal was modified';
+  end if;
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', user_a, 'role', 'authenticated')::text,
+    true
+  );
+
   -- ---------------------------------------------------------------------
   -- Act as an unauthenticated client.
   -- ---------------------------------------------------------------------
@@ -351,7 +477,7 @@ begin
 
   foreach table_name in array array[
     'profiles', 'user_preferences', 'user_symptom_preferences', 'user_suspected_factors',
-    'symptom_logs'
+    'symptom_logs', 'meal_logs', 'meal_items', 'meal_tags'
   ]
   loop
     execute format('select count(*) from public.%I', table_name) into visible_count;

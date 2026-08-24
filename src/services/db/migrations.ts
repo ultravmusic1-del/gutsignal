@@ -115,6 +115,75 @@ export const MIGRATIONS: Migration[] = [
         ON sync_queue (table_name, record_id);
     `,
   },
+  {
+    version: 4,
+    name: 'meal_logs',
+    sql: `
+      -- A meal is an aggregate: the occasion, what was eaten, and how it is described.
+      CREATE TABLE IF NOT EXISTS meal_logs (
+        id                          TEXT    PRIMARY KEY,
+        user_id                     TEXT    NOT NULL,
+        title                       TEXT    NOT NULL,
+        meal_size                   TEXT    NOT NULL
+                                            CHECK (meal_size IN ('small', 'medium', 'large')),
+        note                        TEXT,
+        source                      TEXT    NOT NULL DEFAULT 'manual'
+                                            CHECK (source IN ('manual', 'ai_confirmed',
+                                                              'healthkit', 'imported')),
+        photo_asset_id              TEXT,
+        occurred_at                 TEXT    NOT NULL,
+        occurred_local_date         TEXT    NOT NULL,
+        occurred_tz                 TEXT    NOT NULL,
+        occurred_utc_offset_minutes INTEGER NOT NULL,
+        deleted_at                  TEXT,
+        created_at                  TEXT    NOT NULL,
+        updated_at                  TEXT    NOT NULL,
+
+        -- Needed as the target of the children's composite foreign key, which is what keeps a
+        -- meal's items owned by the same user as the meal itself.
+        UNIQUE (id, user_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_meal_logs_occurred
+        ON meal_logs (user_id, occurred_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_meal_logs_local_date
+        ON meal_logs (user_id, occurred_local_date);
+
+      -- What was eaten. Normalised rather than a blob because the engine's central question
+      -- ("what happened after coffee?") becomes a join once factor_catalog lands at M8.
+      CREATE TABLE IF NOT EXISTS meal_items (
+        id                  TEXT    PRIMARY KEY,
+        meal_id             TEXT    NOT NULL,
+        user_id             TEXT    NOT NULL,
+        -- The user's own words. Never overwritten; normalisation adds alongside it.
+        raw_name            TEXT    NOT NULL,
+        canonical_factor_id TEXT,
+        confidence          REAL,
+        user_confirmed      INTEGER NOT NULL DEFAULT 0,
+        position            INTEGER NOT NULL DEFAULT 0,
+
+        FOREIGN KEY (meal_id, user_id) REFERENCES meal_logs (id, user_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_meal_items_meal ON meal_items (meal_id);
+
+      -- Exposure lookup for the pattern engine (docs/PROJECT_PLAN.md 4.5).
+      CREATE INDEX IF NOT EXISTS idx_meal_items_factor
+        ON meal_items (user_id, canonical_factor_id);
+
+      CREATE TABLE IF NOT EXISTS meal_tags (
+        meal_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        tag     TEXT NOT NULL,
+
+        PRIMARY KEY (meal_id, tag),
+        FOREIGN KEY (meal_id, user_id) REFERENCES meal_logs (id, user_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_meal_tags_tag ON meal_tags (user_id, tag);
+    `,
+  },
 ];
 
 /** Migrations that still need to run, in order. Pure — the unit under test. */
