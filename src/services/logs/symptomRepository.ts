@@ -11,7 +11,8 @@
  */
 
 import { buildOccurrence } from '@/domain/time/occurrence';
-import type { LogSource, SymptomDraft, SymptomLog } from '@/domain/logs/symptom';
+import type { SymptomDraft, SymptomLog } from '@/domain/logs/symptom';
+import type { LogSource } from '@/domain/logs/source';
 import type { SymptomKey } from '@/domain/onboarding/options';
 import type { SqlDatabase } from '@/services/db/sqlite';
 import { enqueue } from '@/services/sync/outbox';

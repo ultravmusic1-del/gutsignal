@@ -16,7 +16,7 @@ import {
   customFactorKey,
   isCustomFactorKey,
 } from '../options';
-import { LOG_SOURCES } from '@/domain/logs/symptom';
+import { LOG_SOURCES } from '@/domain/logs/source';
 
 /**
  * These vocabularies exist in two places: here, and as check constraints in the migration.

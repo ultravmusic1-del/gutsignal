@@ -10,15 +10,13 @@ import { z } from 'zod';
 
 import { SYMPTOMS, SYMPTOM_KEYS, type SymptomKey } from '@/domain/onboarding/options';
 
+import type { LogSource } from './source';
+
 export const SEVERITY_MIN = 1;
 export const SEVERITY_MAX = 10;
 
 /** Longest note we accept here. Anything longer belongs in a journal entry (M7). */
 export const NOTE_MAX_LENGTH = 1000;
-
-/** How a record came to exist. Unconfirmed AI output never reaches this table (§4.1). */
-export const LOG_SOURCES = ['manual', 'ai_confirmed', 'healthkit', 'imported'] as const;
-export type LogSource = (typeof LOG_SOURCES)[number];
 
 /** What the user fills in. Occurrence columns are derived from `occurredAt` at save time. */
 export const symptomDraftSchema = z.object({
