@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AuthProvider } from '@/features/auth/AuthProvider';
 import { createQueryClient } from '@/services/query/client';
 import { ThemeProvider } from '@/theme';
 
@@ -25,27 +26,32 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <QueryClientProvider client={queryClient}>
-            <ErrorBoundary>
-              <StatusBar style="auto" />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="(tabs)" />
-                {/* The log flow is a native form sheet: platform drag-to-dismiss and
+          {/* Above the data providers, below the theme: the fallback UI needs tokens and safe
+              areas, and a provider that throws during init must still be caught. */}
+          <ErrorBoundary>
+            <QueryClientProvider client={queryClient}>
+              <AuthProvider>
+                <StatusBar style="auto" />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="(auth)" />
+                  <Stack.Screen name="(tabs)" />
+                  {/* The log flow is a native form sheet: platform drag-to-dismiss and
                     detents, not a hand-rolled modal. Every logging screen enters here. */}
-                <Stack.Screen
-                  name="log/index"
-                  options={{
-                    presentation: 'formSheet',
-                    sheetAllowedDetents: 'fitToContents',
-                    sheetCornerRadius: 28,
-                    sheetGrabberVisible: true,
-                    headerShown: false,
-                  }}
-                />
-              </Stack>
-            </ErrorBoundary>
-          </QueryClientProvider>
+                  <Stack.Screen
+                    name="log/index"
+                    options={{
+                      presentation: 'formSheet',
+                      sheetAllowedDetents: 'fitToContents',
+                      sheetCornerRadius: 28,
+                      sheetGrabberVisible: true,
+                      headerShown: false,
+                    }}
+                  />
+                </Stack>
+              </AuthProvider>
+            </QueryClientProvider>
+          </ErrorBoundary>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

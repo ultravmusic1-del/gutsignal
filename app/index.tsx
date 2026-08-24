@@ -2,6 +2,7 @@ import { Redirect } from 'expo-router';
 import { View } from 'react-native';
 
 import { useAppBoot, type BootFailureKind } from '@/boot/useAppBoot';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { Card, Screen, Text } from '@/components/ui';
 import { useTheme } from '@/theme';
 
@@ -10,11 +11,12 @@ import { useTheme } from '@/theme';
  * (spec §20) — which is what prevents the auth/navigation flicker of deciding routes inside
  * several providers.
  *
- * Milestone 3 adds the branch to the welcome/auth flow for `unauthenticated`. Until sign-in
- * exists, a booted app goes straight to the tab shell.
+ * Order matters: configuration, then session restore, then route. Onboarding joins the chain
+ * in Milestone 4, keyed on `profiles.onboarding_completed_at`.
  */
 export default function BootGate() {
   const boot = useAppBoot();
+  const auth = useAuth();
 
   if (boot.state === 'booting') {
     // Deliberately blank: the native splash is still up, and rendering a second loading
@@ -26,6 +28,17 @@ export default function BootGate() {
     return <BootFailure problems={boot.problems} kind={boot.failureKind ?? 'environment'} />;
   }
 
+  // Wait for the session restore before deciding. Routing early and correcting afterwards is
+  // exactly the auth flicker the spec calls out (§20).
+  if (!auth.initialised) {
+    return <Screen />;
+  }
+
+  if (!auth.session) {
+    return <Redirect href="/(auth)/welcome" />;
+  }
+
+  // Milestone 4 adds the onboarding branch here, keyed on profiles.onboarding_completed_at.
   return <Redirect href="/(tabs)/today" />;
 }
 

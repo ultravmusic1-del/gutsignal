@@ -12,7 +12,7 @@ import { useTheme } from '@/theme';
 
 import { Text } from './Text';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'onInverse';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'ghostOnInverse' | 'onInverse';
 export type ButtonSize = 'large' | 'medium';
 
 export type ButtonProps = Omit<PressableProps, 'style' | 'children'> & {
@@ -54,6 +54,9 @@ export function Button({
     primary: { bg: theme.colors.accent.solid },
     secondary: { bg: theme.colors.surface.card, border: theme.colors.border.strong },
     ghost: { bg: 'transparent' },
+    // A ghost button on a charcoal surface must not reuse the light-surface accent:
+    // accent.text measures 2.70:1 on surface.inverse, well below AA.
+    ghostOnInverse: { bg: 'transparent' },
     onInverse: { bg: theme.colors.surface.card },
   };
 
@@ -61,6 +64,7 @@ export function Button({
     primary: 'onAccent',
     secondary: 'primary',
     ghost: 'accent',
+    ghostOnInverse: 'accentOnInverse',
     onInverse: 'primary',
   } as const;
 

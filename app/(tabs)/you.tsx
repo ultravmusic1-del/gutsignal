@@ -1,18 +1,41 @@
 import Constants from 'expo-constants';
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Alert, View } from 'react-native';
 
-import { Card, Divider, Screen, Text } from '@/components/ui';
+import { Button, Card, Divider, Screen, Text } from '@/components/ui';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { signOut } from '@/services/auth/authService';
 import { useTheme } from '@/theme';
 
 /**
  * You — profile, settings, reports, subscription, privacy (spec §18).
  *
- * Milestone 2 delivers the shell. Every row here is INFORMATION, not a control: sign-in
- * arrives in M3, settings screens later, subscription in M12. A tappable row that led
- * nowhere would be the dead button the spec forbids, so those rows simply do not exist yet.
+ * Sign-out is real from Milestone 3. The remaining rows are still INFORMATION rather than
+ * controls: settings screens, export and account deletion arrive at their own milestones, and
+ * a tappable row that led nowhere would be the dead button the spec forbids.
  */
 export default function YouScreen() {
   const theme = useTheme();
+  const { session } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const confirmSignOut = () => {
+    Alert.alert('Sign out?', 'Your entries stay on this device and in your account.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: () => {
+          setSigningOut(true);
+          void signOut().then((result) => {
+            setSigningOut(false);
+            if (!result.ok) Alert.alert('Sign out failed', result.message);
+            // On success the session change routes the app back to welcome.
+          });
+        },
+      },
+    ]);
+  };
 
   return (
     <Screen scroll floatingNav>
@@ -24,12 +47,20 @@ export default function YouScreen() {
             ACCOUNT
           </Text>
           <View style={{ height: theme.spacing.xs }} />
-          <Text variant="cardTitle">Not signed in</Text>
+          <Text variant="cardTitle">{session?.user.email ?? 'Signed in'}</Text>
           <View style={{ height: 2 }} />
           <Text variant="body" color="secondary">
-            Entries you make are stored on this device. Signing in will back them up and sync them
-            across your devices.
+            Your entries are stored on this device and backed up to your account.
           </Text>
+          <View style={{ height: theme.spacing.md }} />
+          <Button
+            label="Sign out"
+            variant="secondary"
+            size="medium"
+            loading={signingOut}
+            haptic={false}
+            onPress={confirmSignOut}
+          />
         </Card>
 
         <Card>

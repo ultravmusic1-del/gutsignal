@@ -1,6 +1,6 @@
 # GutSignal — Project Plan
 
-**Status:** Milestones 0–2 implemented — physical-device verification pending
+**Status:** Milestones 0–3 implemented — physical-device verification pending
 **Author:** Claude Code (principal engineer role)
 **Created:** 2026-08-24
 **Last updated:** 2026-08-24
@@ -684,9 +684,31 @@ honest note rather than silently doing nothing.
 **Outstanding:** the acceptance criterion — "the shell feels coherent and polished on a
 physical iPhone" — is unverified. Nothing has been seen on a device yet.
 
-Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md` (M1),
-`DATABASE.md` (M1), `PATTERN_ENGINE.md` (M8), `AI_ARCHITECTURE.md` (M7),
-`PRIVACY_SECURITY.md` (M16), `TEST_PLAN.md` (M1), `APP_STORE_RELEASE.md` (M12).
+### 12.3 Milestone 3 status (2026-08-24)
+
+Supabase project `mrqxmkxhyohlywiziofz` is live and carries the first migration.
+
+| Area         | Delivered                                                                                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema       | `public.profiles` with RLS, a sign-up trigger that creates the row, and a server-side `updated_at` trigger. Helpers live in a `private` schema with execute revoked. See [DATABASE.md](DATABASE.md) |
+| Security     | Isolation test in `supabase/tests/rls_profiles.sql` — run against the live project, all checks passed, fixtures removed, security advisors clean            |
+| Auth service | Apple and email one-time code sign-in, sign-out, session restore. Returns typed results; provider error strings are never shown raw                        |
+| Session      | `AuthProvider` subscribes to `onAuthStateChange` and binds token refresh to app foreground state                                                            |
+| Screens      | Welcome (dark hero), sign-in, email entry (React Hook Form + Zod), code verification with resend cooldown                                                  |
+| Routing      | The boot gate waits for session restore, then routes once — unauthenticated to welcome, authenticated to the tabs                                          |
+| Sign-out     | Real, confirmed, and reachable from You                                                                                                                    |
+
+**Owner action required:** enable the Apple provider in the Supabase dashboard (see
+[DATABASE.md](DATABASE.md) §4). Until then Sign in with Apple fails on a real device — handled
+gracefully with a message pointing at email sign-in, but not functional.
+
+**Not verified:** no sign-in has been performed on a device. The email flow is verified only as
+far as the auth endpoint accepting the project credentials.
+
+Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md`,
+`TEST_PLAN.md`, `AI_ARCHITECTURE.md` (M7), `PATTERN_ENGINE.md` (M8),
+`APP_STORE_RELEASE.md` (M12), `PRIVACY_SECURITY.md` (M16). `DATABASE.md` was written
+alongside the first migration in M3.
 
 ---
 

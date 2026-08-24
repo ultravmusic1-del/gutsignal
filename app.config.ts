@@ -21,6 +21,9 @@ const config: ExpoConfig = {
 
   ios: {
     supportsTablet: false,
+    // Required for Sign in with Apple. The matching capability must also be enabled on the
+    // App ID in the Apple Developer portal before a build can use it.
+    usesAppleSignIn: true,
     bundleIdentifier: 'com.gutsignal.app',
     buildNumber: '1',
     infoPlist: {
@@ -45,6 +48,7 @@ const config: ExpoConfig = {
         imageWidth: 96,
       },
     ],
+    'expo-apple-authentication',
     'expo-secure-store',
     'expo-sqlite',
   ],

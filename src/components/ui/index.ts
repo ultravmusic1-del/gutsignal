@@ -6,3 +6,4 @@ export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { Icon, type IconName, type IconProps } from './Icon';
 export { Screen, type ScreenProps } from './Screen';
 export { Text, type TextProps } from './Text';
+export { TextField, type TextFieldProps } from './TextField';
