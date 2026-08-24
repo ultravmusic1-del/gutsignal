@@ -795,3 +795,41 @@ table upsert — and the engine is indifferent to that.
 
 Three log types remain (bowel, wellbeing, context). Each is now a new entity plus its migration,
 RLS entry and fixtures, with no change to the engine at all.
+
+---
+
+## ADR-0036 — Single-row log types share one repository
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** By the end of Milestone 5 there are four single-row event tables — symptoms, bowel
+movements, wellbeing and context. They differ only in which columns they add to a common shape:
+a device-generated id, four occurrence columns, a note, a source, a tombstone and timestamps.
+Everything that is _easy to get wrong_ is identical between them: the transaction binding a log
+to its outbox row, the tombstone, the last-writer-wins merge, the sync-status join, the
+local-day filter.
+
+**Alternatives considered.** (a) Copy `symptomRepository` three times. (b) One generic
+repository parameterised by a per-type codec. (c) Extend the generic to cover meals as well.
+
+**Reason.** (b). (a) would put four copies of the T9 defence — the transaction that stops a log
+existing without its intent to sync — in four files, where a fix to one silently misses three.
+(c) was rejected in the other direction: a meal is an aggregate spanning three tables written
+through an RPC, and bending one abstraction across both shapes would make each worse than a
+clean split (ADR-0034).
+
+**Consequences.** A log type supplies a `LogCodec` — its table name, its extra columns, and how
+they map to and from its domain type — and gets create, update, tombstone, day query, recent
+query and merge for free. `symptomRepository` was **retrofitted onto it with its public API
+unchanged**, so its twenty existing tests ran untouched as the regression net; they passed
+without modification, which is the evidence that the generic behaves identically.
+
+The same collapse happened on the sync side: all four types reach the server as a plain table
+upsert plus a cursor read, so `logEntities.ts` builds all four `SyncEntity` implementations from
+one factory. `symptomRemote.ts` was deleted rather than joined by three siblings.
+
+Two seams are worth naming. The generic derives its column list from the row object's own keys
+rather than restating it, so a new column cannot be silently dropped on write; the interpolated
+names come from our row types, never user input, and values are always bound. And SQLite has no
+boolean, while the row shape is _also_ the wire format sent to Postgres where the column really
+is a boolean — so rows carry `true`/`false` and are narrowed to 1/0 on the way into SQLite only.

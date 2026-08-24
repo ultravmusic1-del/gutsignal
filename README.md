@@ -115,17 +115,18 @@ or the CLI. RLS isolation tests: `supabase/tests/rls_isolation.sql`.
 
 ## Current state
 
-**Milestones 0–4 complete. Milestone 5 in progress** — symptom and meal logging work end to
-end, offline. 292 tests passing, `expo-doctor` 21/21, iOS bundle builds.
+**Milestones 0–4 complete. Milestone 5 feature-complete** — meals, symptoms, bowel movements,
+wellbeing and context all log offline and sync. 328 tests passing, `expo-doctor` 21/21, iOS
+bundle builds. Only the on-device airplane-mode verification remains.
 
-| #   | Milestone              | State                                                                                |
-| --- | ---------------------- | ------------------------------------------------------------------------------------ |
-| 0   | Technical audit        | Done — plan, 29 ADRs, Windows/iOS workflow                                           |
-| 1   | Foundation             | Done — theme, UI primitives, boot sequence, Supabase client, local SQLite            |
-| 2   | Design system + shells | Done — floating nav, four tabs, log sheet                                            |
-| 3   | Auth                   | Done — Apple + email OTP, `profiles` table, RLS verified                             |
-| 4   | Onboarding             | Done — full flow, preferences schema, RLS verified                                   |
-| 5   | Offline logging        | **In progress** — symptoms and meals done end to end; bowel, wellbeing, context next |
+| #   | Milestone              | State                                                                             |
+| --- | ---------------------- | --------------------------------------------------------------------------------- |
+| 0   | Technical audit        | Done — plan, 29 ADRs, Windows/iOS workflow                                        |
+| 1   | Foundation             | Done — theme, UI primitives, boot sequence, Supabase client, local SQLite         |
+| 2   | Design system + shells | Done — floating nav, four tabs, log sheet                                         |
+| 3   | Auth                   | Done — Apple + email OTP, `profiles` table, RLS verified                          |
+| 4   | Onboarding             | Done — full flow, preferences schema, RLS verified                                |
+| 5   | Offline logging        | **Built** — all five log types offline + sync; airplane-mode check needs a device |
 
 **Nothing has ever run on a physical device.** All verification so far is tests, bundling and
 direct database checks. Milestone 5's acceptance criterion (log in airplane mode, reconnect,

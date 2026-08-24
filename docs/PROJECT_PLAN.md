@@ -615,7 +615,7 @@ importing native Swift architecture patterns here would be a mistake.
 | 2   | Design system + navigation shells + floating log action                                                           | Shell feels coherent on a physical iPhone                               | —                                         |
 | 3   | Auth (Apple + email OTP), boot restoration, logout                                                                | Repeated login/logout survives restarts                                 | Apple Sign-In capability                  |
 | 4   | Onboarding (all screens from spec §24–32)                                                                         | New user completes setup with no dead ends                              | —                                         |
-| 5   | Core offline logging + outbox + sync                                                                              | Logs created in airplane mode sync correctly on reconnect               | — (symptoms + meals done; §12.5–12.6)     |
+| 5   | Core offline logging + outbox + sync                                                                              | Logs created in airplane mode sync correctly on reconnect               | — (all log types done; §12.5–12.7)        |
 | 6   | Timeline: pagination, filters, edit/delete, sync badges                                                           | Smooth with a large synthetic dataset                                   | —                                         |
 | 7   | AI-assisted logging (photo/text/voice/journal)                                                                    | No confirmed health record is ever created without user confirmation    | AI provider account                       |
 | 8   | Deterministic pattern engine + 15 fixtures                                                                        | All fixtures produce the expected classifications                       | —                                         |
@@ -802,6 +802,44 @@ for something the engine can compute exactly. Both are derivable at M8 without e
 
 **Remaining in M5:** bowel, wellbeing and context logging. Each is now a new `SyncEntity` plus
 its migration, RLS entry and fixtures — no engine changes.
+
+### 12.7 Milestone 5 — bowel, wellbeing and context (2026-08-24)
+
+The last three log types, which **completes the offline logging surface of Milestone 5**.
+Verified on Windows: `expo-doctor` 21/21, `tsc --noEmit` clean, `eslint` clean, **328 tests
+passing**, iOS Metro bundle builds.
+
+| Area      | Delivered                                                                                                                                                |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema    | `bowel_logs`, `wellbeing_logs`, `context_logs` — RLS on all three, applied to the live project, advisors clean                                           |
+| Shared    | One `logRepository` now backs all four single-row types; symptoms retrofitted onto it with their twenty tests unchanged as the regression net (ADR-0036) |
+| Sync      | All four single-row types build from one entity factory. `symptomRemote.ts` deleted rather than joined by three near-copies                              |
+| Bowel     | Bristol 1–7 with original plain-language descriptions, urgency, difficulty, an unfinished flag                                                           |
+| Wellbeing | One tap from the log sheet — no screen, because every extra step shrinks the control group                                                               |
+| Context   | Stress and sleep on a 1–5 scale with both ends named; exercise as a level. One value per type, enforced identically in Zod and in Postgres               |
+| Today     | All five entry types interleaved by time                                                                                                                 |
+
+**Why wellbeing matters more than its size suggests.** It is the pattern engine's control group.
+The absence of a symptom log is not evidence of a good day — it could equally mean the user was
+busy or forgot — so a good day only counts when they say so explicitly (spec §44, §59). Every
+second added to that interaction biases the comparison set toward the most diligent users.
+
+**Deliberately out of scope.** Journal (§46) is AI-driven and belongs to M7. Travel and
+menstrual-cycle context are listed in §47 as possible _later, opt-in_ additions, in the same
+breath as a warning against building an overwhelming universal health diary — asking every user
+for them would be that overreach.
+
+**A defect found and fixed in this pass.** `log/meal` had never been registered in the root
+`Stack`: an earlier edit's anchor silently failed to match after Prettier reindented the file.
+Expo Router registers routes from the filesystem, so meal logging worked — but as a full-screen
+push rather than the intended form sheet. Typecheck, lint, tests and the bundle all passed with
+it broken; only running the app would have caught it. All five log routes are now registered
+explicitly.
+
+**Still unverified:** nothing has run on a device. That remains M5's own acceptance criterion.
+
+**What is left in Milestone 5:** the airplane-mode verification itself. Every log type the
+milestone calls for now writes offline, queues durably and syncs bidirectionally.
 
 Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md`,
 `TEST_PLAN.md`, `AI_ARCHITECTURE.md` (M7), `PATTERN_ENGINE.md` (M8),

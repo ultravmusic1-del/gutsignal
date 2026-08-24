@@ -174,6 +174,30 @@ parent — an index lookup per row instead of a subquery (§4.4).
 `(user_id, updated_at)` on `meal_logs`; `(meal_id)` and `(user_id, canonical_factor_id)` on
 `meal_items`; `(user_id, tag)` on `meal_tags`.
 
+### Bowel, wellbeing and context — migration `20260824190000_bowel_wellbeing_context_logs.sql`
+
+Three single-row event tables following the `symptom_logs` template exactly: device-generated
+uuid primary key, four occurrence columns, `source`, `deleted_at` tombstone, and a server-owned
+`updated_at` driving the sync cursor. RLS is the same four policies on
+`(select auth.uid()) = user_id`, scoped `to authenticated`.
+
+`bowel_logs` — `bristol_type` (1–7), `urgency`, `difficulty`, `incomplete`. The Bristol scale
+describes one observation; nothing maps a type to a condition, and nothing should (CLAUDE.md
+§17).
+
+`wellbeing_logs` — the smallest table here and the one the pattern engine cannot work without.
+It is the **control group**. Absence of a symptom log is not evidence of a good day, so a good
+day only counts when the user says so explicitly (spec §44, §59). It has no value column by
+design: spec §44 asks for one tap, and every extra second biases the control set toward the most
+diligent users.
+
+`context_logs` — a typed observation carrying **exactly one** value: `stress` and
+`sleep_quality` carry `value_numeric` (1–5), `exercise` carries `value_text`. The
+`context_value_matches_type` constraint enforces the pairing, and the app's Zod schema states
+the same rule the same way — a row carrying the wrong kind of value is one the engine could not
+interpret. Its day index includes `context_type`, because context is almost always read as
+"this type, on this day".
+
 ## 3. Security verification
 
 `supabase/tests/rls_isolation.sql` is a self-contained, repeatable isolation test covering
@@ -223,9 +247,8 @@ email sign-in rather than shown a generic failure.
 
 ## 5. Planned tables
 
-Milestone 5 continues with the remaining logging tables (`bowel_logs`, `wellbeing_logs`,
-`context_logs`, `journal_entries`) — `symptom_logs` landed first as the vertical slice
-(ADR-0030), then the meal tables as the first aggregate (ADR-0034). Milestone 7 adds
+Milestone 5's logging tables are complete. `journal_entries` arrives with the journal at
+Milestone 7. Milestone 7 adds
 `ai_extraction_candidates` and `ai_usage_events`, and Milestone 8 adds `factor_catalog`,
 `factor_aliases` and `pattern_findings`. Each arrives with its own migration, its own RLS
 policies, and its own entry in the isolation test — a table without both is not finished.
