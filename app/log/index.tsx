@@ -10,8 +10,10 @@ type LogAction = {
   label: string;
   description: string;
   icon: IconName;
-  /** Wired up in Milestone 5. Until then the row is honestly disabled, not silently dead. */
+  /** A row is only enabled once it actually saves something. No fake buttons (CLAUDE.md §57). */
   available: boolean;
+  /** Where it goes. Present only for available rows. */
+  route?: '/log/symptom';
 };
 
 /**
@@ -34,7 +36,8 @@ const PRIMARY: LogAction[] = [
     label: 'Symptoms',
     description: 'How you are feeling, and how strongly',
     icon: 'plus',
-    available: false,
+    available: true,
+    route: '/log/symptom',
   },
   {
     key: 'bowel',
@@ -79,14 +82,18 @@ export default function LogSheet() {
         <View style={{ gap: theme.spacing.xxs }}>
           <Text variant="section">Add an entry</Text>
           <Text variant="caption" color="secondary">
-            Entry types are in place. Logging itself is being built next — nothing here saves
-            anything yet.
+            Symptom logging works offline — entries save to this device immediately. The remaining
+            types are still being built.
           </Text>
         </View>
 
         <View style={{ gap: theme.spacing.xs }}>
           {PRIMARY.map((action) => (
-            <LogActionRow key={action.key} action={action} />
+            <LogActionRow
+              key={action.key}
+              action={action}
+              onPress={action.route ? () => router.push(action.route as '/log/symptom') : undefined}
+            />
           ))}
         </View>
 
@@ -119,18 +126,21 @@ export default function LogSheet() {
   );
 }
 
-function LogActionRow({ action, compact = false }: { action: LogAction; compact?: boolean }) {
+function LogActionRow({
+  action,
+  compact = false,
+  onPress,
+}: {
+  action: LogAction;
+  compact?: boolean;
+  onPress?: () => void;
+}) {
   const theme = useTheme();
 
-  return (
+  const card = (
     <Card
       elevation={action.available ? 'card' : 'flat'}
       padding={compact ? 'md' : 'lg'}
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={action.label}
-      accessibilityHint={action.description}
-      accessibilityState={{ disabled: !action.available }}
       style={{ opacity: action.available ? 1 : 0.55 }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
@@ -163,5 +173,33 @@ function LogActionRow({ action, compact = false }: { action: LogAction; compact?
         )}
       </View>
     </Card>
+  );
+
+  // A row that does nothing is announced as a disabled button rather than being silently
+  // inert — the user is told it exists and is not ready, not left tapping at nothing.
+  if (onPress === undefined) {
+    return (
+      <View
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={action.label}
+        accessibilityHint={action.description}
+        accessibilityState={{ disabled: true }}
+      >
+        {card}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={action.label}
+      accessibilityHint={action.description}
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+    >
+      {card}
+    </Pressable>
   );
 }

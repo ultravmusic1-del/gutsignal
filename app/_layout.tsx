@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/features/auth/AuthProvider';
+import { SyncProvider } from '@/features/sync/SyncProvider';
 import { createQueryClient } from '@/services/query/client';
 import { ThemeProvider } from '@/theme';
 
@@ -31,25 +32,41 @@ export default function RootLayout() {
           <ErrorBoundary>
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
-                <StatusBar style="auto" />
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="index" />
-                  <Stack.Screen name="(auth)" />
-                  <Stack.Screen name="(onboarding)" />
-                  <Stack.Screen name="(tabs)" />
-                  {/* The log flow is a native form sheet: platform drag-to-dismiss and
+                {/* Inside AuthProvider: the engine's lifetime follows the session, starting
+                    when one appears and stopping on sign-out. */}
+                <SyncProvider>
+                  <StatusBar style="auto" />
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="index" />
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(onboarding)" />
+                    <Stack.Screen name="(tabs)" />
+                    {/* The log flow is a native form sheet: platform drag-to-dismiss and
                     detents, not a hand-rolled modal. Every logging screen enters here. */}
-                  <Stack.Screen
-                    name="log/index"
-                    options={{
-                      presentation: 'formSheet',
-                      sheetAllowedDetents: 'fitToContents',
-                      sheetCornerRadius: 28,
-                      sheetGrabberVisible: true,
-                      headerShown: false,
-                    }}
-                  />
-                </Stack>
+                    <Stack.Screen
+                      name="log/index"
+                      options={{
+                        presentation: 'formSheet',
+                        sheetAllowedDetents: 'fitToContents',
+                        sheetCornerRadius: 28,
+                        sheetGrabberVisible: true,
+                        headerShown: false,
+                      }}
+                    />
+                    {/* The symptom form is taller than the action list, so it takes a large
+                    detent rather than fitting to content. */}
+                    <Stack.Screen
+                      name="log/symptom"
+                      options={{
+                        presentation: 'formSheet',
+                        sheetAllowedDetents: [0.9],
+                        sheetCornerRadius: 28,
+                        sheetGrabberVisible: true,
+                        headerShown: false,
+                      }}
+                    />
+                  </Stack>
+                </SyncProvider>
               </AuthProvider>
             </QueryClientProvider>
           </ErrorBoundary>
