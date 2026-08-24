@@ -16,6 +16,7 @@ import {
   customFactorKey,
   isCustomFactorKey,
 } from '../options';
+import { LOG_SOURCES } from '@/domain/logs/symptom';
 
 /**
  * These vocabularies exist in two places: here, and as check constraints in the migration.
@@ -30,8 +31,8 @@ const migrationSql = readFileSync(
 );
 
 /** Pulls the quoted values out of a `check (col in ('a', 'b'))` clause. */
-function constraintValues(column: string): string[] {
-  const match = new RegExp(`${column}\\s+in\\s*\\(([^)]*)\\)`, 'i').exec(migrationSql);
+function constraintValues(column: string, sql: string = migrationSql): string[] {
+  const match = new RegExp(`${column}\\s+in\\s*\\(([^)]*)\\)`, 'i').exec(sql);
   if (!match?.[1]) throw new Error(`No check constraint found for ${column}`);
 
   return [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
@@ -103,5 +104,35 @@ describe('custom factors', () => {
   it('stays within the 64-character column limit even for long input', () => {
     const key = customFactorKey('a'.repeat(200));
     expect(key.length).toBeLessThanOrEqual(64);
+  });
+});
+
+/**
+ * The same drift risk, for the first event table. `symptom_logs` is written offline and synced
+ * later, so a key the database rejects would not surface at log time — it would surface as a
+ * log that silently never leaves the device.
+ */
+describe('symptom log vocabulary parity', () => {
+  const symptomLogsSql = readFileSync(
+    join(process.cwd(), 'supabase/migrations/20260824140000_symptom_logs.sql'),
+    'utf8'
+  );
+
+  it('accepts exactly the symptoms the app can produce', () => {
+    expect([...SYMPTOM_KEYS].sort()).toEqual(
+      constraintValues('symptom_type', symptomLogsSql).sort()
+    );
+  });
+
+  it('accepts exactly the sources the app can produce', () => {
+    expect([...LOG_SOURCES].sort()).toEqual(constraintValues('source', symptomLogsSql).sort());
+  });
+
+  it('uses the same symptom vocabulary as the onboarding preference table', () => {
+    // The user picks what to track in onboarding and logs from that same list. If these two
+    // constraints ever diverged, a symptom could be trackable but not loggable.
+    expect(constraintValues('symptom_type', symptomLogsSql).sort()).toEqual(
+      constraintValues('symptom_type').sort()
+    );
   });
 });

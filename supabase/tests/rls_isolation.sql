@@ -25,6 +25,8 @@ declare
   insert_was_blocked boolean := false;
   delete_was_blocked boolean := false;
   table_name         text;
+  log_a uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  log_b uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 begin
   -- ---------------------------------------------------------------------
   -- Fixtures. Inserting into auth.users also exercises the sign-up trigger.
@@ -214,6 +216,133 @@ begin
     raise exception 'FAILED: a custom factor was accepted without a label';
   end if;
 
+  -- =====================================================================
+  -- Symptom logs (migration 20260824140000)
+  --
+  -- The first user event table. Because the offline sync path upserts on an id the DEVICE
+  -- generated, this section also proves the case unique to that design: a client that guesses
+  -- or replays another user's row id still cannot write into their history.
+  -- =====================================================================
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', null, true);
+
+  insert into public.symptom_logs (
+    id, user_id, symptom_type, severity, occurred_at, occurred_local_date,
+    occurred_tz, occurred_utc_offset_minutes
+  )
+  values
+    (log_a, user_a, 'bloating', 5, now(), current_date, 'Europe/London', 60),
+    (log_b, user_b, 'cramping', 7, now(), current_date, 'Europe/London', 60);
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', user_a, 'role', 'authenticated')::text,
+    true
+  );
+
+  -- 1. SELECT isolation
+  select count(*) into visible_count from public.symptom_logs;
+  if visible_count <> 1 then
+    raise exception 'FAILED: user A sees % symptom logs, expected only their own', visible_count;
+  end if;
+
+  select count(*) into visible_count from public.symptom_logs where user_id = user_b;
+  if visible_count <> 0 then
+    raise exception 'FAILED: user A can read user B''s symptom logs';
+  end if;
+
+  -- 2. UPDATE isolation
+  with attempted as (
+    update public.symptom_logs set severity = 1 where id = log_b returning 1
+  )
+  select count(*) into affected_count from attempted;
+  if affected_count <> 0 then
+    raise exception 'FAILED: user A updated user B''s symptom log';
+  end if;
+
+  -- 3. DELETE isolation
+  with attempted as (delete from public.symptom_logs where id = log_b returning 1)
+  select count(*) into affected_count from attempted;
+  if affected_count <> 0 then
+    raise exception 'FAILED: user A deleted user B''s symptom log';
+  end if;
+
+  -- 4. INSERT impersonation refused
+  insert_was_blocked := false;
+  begin
+    insert into public.symptom_logs (
+      id, user_id, symptom_type, severity, occurred_at, occurred_local_date,
+      occurred_tz, occurred_utc_offset_minutes
+    )
+    values (gen_random_uuid(), user_b, 'nausea', 4, now(), current_date, 'UTC', 0);
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: user A inserted a symptom log owned by user B';
+  end if;
+
+  -- 5. The sync upsert cannot be aimed at someone else's row.
+  --
+  -- This is the threat specific to device-generated ids: the client picks the primary key, so
+  -- the check that matters is not "can A insert as B" but "can A's upsert land on B's row".
+  begin
+    insert into public.symptom_logs (
+      id, user_id, symptom_type, severity, occurred_at, occurred_local_date,
+      occurred_tz, occurred_utc_offset_minutes
+    )
+    values (log_b, user_a, 'gas', 2, now(), current_date, 'UTC', 0)
+    on conflict (id) do update set severity = excluded.severity;
+  exception when others then null;  -- blocked is fine; silently doing nothing is also fine
+  end;
+
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', null, true);
+  select severity into visible_count from public.symptom_logs where id = log_b;
+  if visible_count <> 7 then
+    raise exception 'FAILED: an upsert aimed at user B''s row id changed it (severity is now %)',
+      visible_count;
+  end if;
+  select count(*) into visible_count from public.symptom_logs where user_id = user_b;
+  if visible_count <> 1 then
+    raise exception 'FAILED: user B now owns % rows after user A''s upsert attempt', visible_count;
+  end if;
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', user_a, 'role', 'authenticated')::text,
+    true
+  );
+
+  -- 6. The user's own log is writable, and a delete is a tombstone rather than a removal.
+  update public.symptom_logs set deleted_at = now() where id = log_a;
+  get diagnostics affected_count = row_count;
+  if affected_count <> 1 then
+    raise exception 'FAILED: user A cannot tombstone their own symptom log';
+  end if;
+
+  select count(*) into visible_count from public.symptom_logs where id = log_a;
+  if visible_count <> 1 then
+    raise exception 'FAILED: the tombstoned row disappeared instead of being marked deleted';
+  end if;
+
+  -- 7. updated_at is server-owned.
+  --
+  -- The sync cursor is "everything changed at or after this timestamp". If a device with a
+  -- wrong clock could write its own updated_at, it could place a row permanently behind every
+  -- other device's cursor and make it invisible to them.
+  update public.symptom_logs
+  set severity = 6, updated_at = timestamptz '2000-01-01 00:00:00Z'
+  where id = log_a;
+
+  select count(*) into affected_count
+  from public.symptom_logs
+  where id = log_a and updated_at = timestamptz '2000-01-01 00:00:00Z';
+  if affected_count <> 0 then
+    raise exception 'FAILED: the client was able to set symptom_logs.updated_at directly';
+  end if;
+
   -- ---------------------------------------------------------------------
   -- Act as an unauthenticated client.
   -- ---------------------------------------------------------------------
@@ -221,7 +350,8 @@ begin
   perform set_config('request.jwt.claims', null, true);
 
   foreach table_name in array array[
-    'profiles', 'user_preferences', 'user_symptom_preferences', 'user_suspected_factors'
+    'profiles', 'user_preferences', 'user_symptom_preferences', 'user_suspected_factors',
+    'symptom_logs'
   ]
   loop
     execute format('select count(*) from public.%I', table_name) into visible_count;
