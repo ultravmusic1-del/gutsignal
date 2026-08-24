@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 
-import { MIGRATIONS, pendingMigrations, targetVersion, type Migration } from './migrations';
+import { migrate } from './migrator';
 
 export const DATABASE_NAME = 'gutsignal.db';
 
@@ -26,42 +26,8 @@ export async function openDatabase(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
-/** Applies pending migrations, each inside its own transaction. */
-export async function migrate(
-  db: SQLite.SQLiteDatabase,
-  migrations: Migration[] = MIGRATIONS
-): Promise<number> {
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version    INTEGER PRIMARY KEY,
-      name       TEXT    NOT NULL,
-      applied_at TEXT    NOT NULL
-    );
-  `);
-
-  const current = await getSchemaVersion(db);
-
-  for (const migration of pendingMigrations(current, migrations)) {
-    await db.withTransactionAsync(async () => {
-      await db.execAsync(migration.sql);
-      await db.runAsync(
-        'INSERT OR REPLACE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)',
-        migration.version,
-        migration.name,
-        new Date().toISOString()
-      );
-    });
-  }
-
-  return targetVersion(migrations);
-}
-
-export async function getSchemaVersion(db: SQLite.SQLiteDatabase): Promise<number> {
-  const row = await db.getFirstAsync<{ version: number | null }>(
-    'SELECT MAX(version) AS version FROM schema_migrations'
-  );
-  return row?.version ?? 0;
-}
+/** The migration runner and schema-version reader now live in `migrator.ts`. */
+export { getSchemaVersion, migrate } from './migrator';
 
 /** Closes and forgets the handle. Used by account deletion and by tests. */
 export async function closeDatabase(): Promise<void> {

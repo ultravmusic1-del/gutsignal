@@ -54,6 +54,67 @@ export const MIGRATIONS: Migration[] = [
         ON sync_queue (table_name, record_id);
     `,
   },
+  {
+    version: 2,
+    name: 'symptom_logs',
+    sql: `
+      -- Local mirror of public.symptom_logs. Same shape as Postgres so a row can be upserted
+      -- without translation, and so the UI can read entirely from here while offline.
+      CREATE TABLE IF NOT EXISTS symptom_logs (
+        id                          TEXT    PRIMARY KEY,
+        user_id                     TEXT    NOT NULL,
+        symptom_type                TEXT    NOT NULL,
+        severity                    INTEGER NOT NULL CHECK (severity BETWEEN 1 AND 10),
+        note                        TEXT,
+        source                      TEXT    NOT NULL DEFAULT 'manual'
+                                            CHECK (source IN ('manual', 'ai_confirmed',
+                                                              'healthkit', 'imported')),
+        occurred_at                 TEXT    NOT NULL,
+        occurred_local_date         TEXT    NOT NULL,
+        occurred_tz                 TEXT    NOT NULL,
+        occurred_utc_offset_minutes INTEGER NOT NULL,
+        deleted_at                  TEXT,
+        created_at                  TEXT    NOT NULL,
+        updated_at                  TEXT    NOT NULL
+      );
+
+      -- Timeline pagination.
+      CREATE INDEX IF NOT EXISTS idx_symptom_logs_occurred
+        ON symptom_logs (user_id, occurred_at DESC);
+
+      -- Day grouping reads occurred_local_date, never the UTC date (docs/PROJECT_PLAN.md 4.2).
+      CREATE INDEX IF NOT EXISTS idx_symptom_logs_local_date
+        ON symptom_logs (user_id, occurred_local_date);
+
+      -- One row per table, holding the server updated_at watermark the next pull resumes from.
+      CREATE TABLE IF NOT EXISTS sync_cursors (
+        table_name TEXT PRIMARY KEY,
+        cursor     TEXT,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
+  {
+    version: 3,
+    name: 'outbox_backoff',
+    sql: `
+      -- When a failed row may next be attempted. NULL means "now".
+      -- ALTER TABLE ADD COLUMN has no IF NOT EXISTS in SQLite, so unlike the other migrations
+      -- this one is not re-runnable on its own. It does not need to be: the runner applies a
+      -- migration and records its version inside one transaction, and SQLite DDL is
+      -- transactional, so a crash mid-migration rolls the column back with it.
+      ALTER TABLE sync_queue ADD COLUMN next_attempt_at TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_due
+        ON sync_queue (status, next_attempt_at);
+
+      -- One outbox row per record: an entry exists if and only if that record has local changes
+      -- the server has not confirmed. Enqueuing again coalesces onto this row rather than
+      -- queuing a second upload of the same log.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_queue_unique_record
+        ON sync_queue (table_name, record_id);
+    `,
+  },
 ];
 
 /** Migrations that still need to run, in order. Pure — the unit under test. */
