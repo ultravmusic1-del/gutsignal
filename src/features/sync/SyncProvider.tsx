@@ -13,7 +13,7 @@ import { AppState } from 'react-native';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { openDatabase } from '@/services/db/database';
 import { createMealSyncEntity } from '@/services/logs/mealRemote';
-import { createSymptomSyncEntity } from '@/services/logs/symptomRemote';
+import { createSimpleLogEntities } from '@/services/logs/logEntities';
 import { clearCursors } from '@/services/sync/cursors';
 import { createNetworkMonitor } from '@/services/sync/network';
 import { pendingCount } from '@/services/sync/outbox';
@@ -90,7 +90,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
         const engine = createSyncEngine({
           db,
-          entities: [createSymptomSyncEntity(userId), createMealSyncEntity(userId)],
+          entities: [...createSimpleLogEntities(userId), createMealSyncEntity(userId)],
           network: createNetworkMonitor(),
         });
 
