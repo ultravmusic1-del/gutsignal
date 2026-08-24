@@ -13,7 +13,7 @@ type LogAction = {
   /** A row is only enabled once it actually saves something. No fake buttons (CLAUDE.md §57). */
   available: boolean;
   /** Where it goes. Present only for available rows. */
-  route?: '/log/symptom';
+  route?: '/log/symptom' | '/log/meal';
 };
 
 /**
@@ -27,9 +27,10 @@ const PRIMARY: LogAction[] = [
   {
     key: 'meal',
     label: 'Meal',
-    description: 'Photo, description, voice or repeat a previous meal',
+    description: 'What you ate, or repeat a previous meal',
     icon: 'plus',
-    available: false,
+    available: true,
+    route: '/log/meal',
   },
   {
     key: 'symptoms',
@@ -92,7 +93,7 @@ export default function LogSheet() {
             <LogActionRow
               key={action.key}
               action={action}
-              onPress={action.route ? () => router.push(action.route as '/log/symptom') : undefined}
+              onPress={action.route ? () => router.push(action.route as '/log/meal') : undefined}
             />
           ))}
         </View>
