@@ -469,6 +469,120 @@ begin
     true
   );
 
+  -- =====================================================================
+  -- Bowel, wellbeing and context logs (migration 20260824190000)
+  --
+  -- All three are single-row tables following the symptom_logs template, so the checks are the
+  -- same four every user-owned table must pass. They are driven from a loop rather than written
+  -- out three times: a table added to the list is a table that gets tested, which is the
+  -- property worth having.
+  -- =====================================================================
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', null, true);
+
+  insert into public.bowel_logs (id, user_id, bristol_type, urgency, difficulty, occurred_at,
+    occurred_local_date, occurred_tz, occurred_utc_offset_minutes)
+  values (gen_random_uuid(), user_b, 4, 'low', 'easy', now(), current_date, 'UTC', 0);
+
+  insert into public.wellbeing_logs (id, user_id, occurred_at, occurred_local_date,
+    occurred_tz, occurred_utc_offset_minutes)
+  values (gen_random_uuid(), user_b, now(), current_date, 'UTC', 0);
+
+  insert into public.context_logs (id, user_id, context_type, value_numeric, occurred_at,
+    occurred_local_date, occurred_tz, occurred_utc_offset_minutes)
+  values (gen_random_uuid(), user_b, 'stress', 4, now(), current_date, 'UTC', 0);
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', user_a, 'role', 'authenticated')::text,
+    true
+  );
+
+  foreach table_name in array array['bowel_logs', 'wellbeing_logs', 'context_logs']
+  loop
+    -- 1. SELECT isolation: user B's row is invisible, so the table reads as empty to user A.
+    execute format('select count(*) from public.%I', table_name) into visible_count;
+    if visible_count <> 0 then
+      raise exception 'FAILED: user A sees % rows in %, expected none of user B''s',
+        visible_count, table_name;
+    end if;
+
+    -- 2. UPDATE isolation.
+    execute format('update public.%I set note = ''HACKED'' where user_id = $1', table_name)
+      using user_b;
+    get diagnostics affected_count = row_count;
+    if affected_count <> 0 then
+      raise exception 'FAILED: user A updated % rows in % belonging to user B',
+        affected_count, table_name;
+    end if;
+
+    -- 3. DELETE isolation.
+    execute format('delete from public.%I where user_id = $1', table_name) using user_b;
+    get diagnostics affected_count = row_count;
+    if affected_count <> 0 then
+      raise exception 'FAILED: user A deleted % rows from % belonging to user B',
+        affected_count, table_name;
+    end if;
+  end loop;
+
+  -- 4. INSERT impersonation refused, per table (the columns differ, so not a loop).
+  insert_was_blocked := false;
+  begin
+    insert into public.bowel_logs (id, user_id, bristol_type, urgency, difficulty, occurred_at,
+      occurred_local_date, occurred_tz, occurred_utc_offset_minutes)
+    values (gen_random_uuid(), user_b, 4, 'low', 'easy', now(), current_date, 'UTC', 0);
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: user A inserted a bowel log owned by user B';
+  end if;
+
+  insert_was_blocked := false;
+  begin
+    insert into public.wellbeing_logs (id, user_id, occurred_at, occurred_local_date,
+      occurred_tz, occurred_utc_offset_minutes)
+    values (gen_random_uuid(), user_b, now(), current_date, 'UTC', 0);
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: user A inserted a wellbeing log owned by user B';
+  end if;
+
+  insert_was_blocked := false;
+  begin
+    insert into public.context_logs (id, user_id, context_type, value_numeric, occurred_at,
+      occurred_local_date, occurred_tz, occurred_utc_offset_minutes)
+    values (gen_random_uuid(), user_b, 'stress', 2, now(), current_date, 'UTC', 0);
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: user A inserted a context log owned by user B';
+  end if;
+
+  -- 5. A context row must carry the value its type calls for. This is a data-integrity rule
+  --    rather than an RLS one, but a row the engine cannot interpret is worth catching here.
+  insert_was_blocked := false;
+  begin
+    insert into public.context_logs (id, user_id, context_type, value_text, occurred_at,
+      occurred_local_date, occurred_tz, occurred_utc_offset_minutes)
+    values (gen_random_uuid(), user_a, 'stress', 'moderate', now(), current_date, 'UTC', 0);
+  exception when others then insert_was_blocked := true;
+  end;
+  if not insert_was_blocked then
+    raise exception 'FAILED: a stress entry was accepted carrying an exercise level';
+  end if;
+
+  -- 6. The user's own rows remain writable.
+  insert into public.wellbeing_logs (id, user_id, occurred_at, occurred_local_date,
+    occurred_tz, occurred_utc_offset_minutes)
+  values (gen_random_uuid(), user_a, now(), current_date, 'UTC', 0);
+
+  select count(*) into visible_count from public.wellbeing_logs;
+  if visible_count <> 1 then
+    raise exception 'FAILED: user A cannot record their own wellbeing log';
+  end if;
+
   -- ---------------------------------------------------------------------
   -- Act as an unauthenticated client.
   -- ---------------------------------------------------------------------
@@ -477,7 +591,8 @@ begin
 
   foreach table_name in array array[
     'profiles', 'user_preferences', 'user_symptom_preferences', 'user_suspected_factors',
-    'symptom_logs', 'meal_logs', 'meal_items', 'meal_tags'
+    'symptom_logs', 'meal_logs', 'meal_items', 'meal_tags',
+    'bowel_logs', 'wellbeing_logs', 'context_logs'
   ]
   loop
     execute format('select count(*) from public.%I', table_name) into visible_count;

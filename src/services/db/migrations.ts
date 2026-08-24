@@ -184,6 +184,97 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_meal_tags_tag ON meal_tags (user_id, tag);
     `,
   },
+  {
+    version: 5,
+    name: 'bowel_wellbeing_context_logs',
+    sql: `
+      CREATE TABLE IF NOT EXISTS bowel_logs (
+        id                          TEXT    PRIMARY KEY,
+        user_id                     TEXT    NOT NULL,
+        bristol_type                INTEGER NOT NULL CHECK (bristol_type BETWEEN 1 AND 7),
+        urgency                     TEXT    NOT NULL
+                                            CHECK (urgency IN ('none','low','moderate','high')),
+        difficulty                  TEXT    NOT NULL
+                                            CHECK (difficulty IN ('easy','moderate','difficult')),
+        incomplete                  INTEGER NOT NULL DEFAULT 0,
+        note                        TEXT,
+        source                      TEXT    NOT NULL DEFAULT 'manual'
+                                            CHECK (source IN ('manual','ai_confirmed',
+                                                              'healthkit','imported')),
+        occurred_at                 TEXT    NOT NULL,
+        occurred_local_date         TEXT    NOT NULL,
+        occurred_tz                 TEXT    NOT NULL,
+        occurred_utc_offset_minutes INTEGER NOT NULL,
+        deleted_at                  TEXT,
+        created_at                  TEXT    NOT NULL,
+        updated_at                  TEXT    NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_bowel_logs_occurred
+        ON bowel_logs (user_id, occurred_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_bowel_logs_local_date
+        ON bowel_logs (user_id, occurred_local_date);
+
+      -- The control group. Never inferred from missing symptom logs (spec 44).
+      CREATE TABLE IF NOT EXISTS wellbeing_logs (
+        id                          TEXT    PRIMARY KEY,
+        user_id                     TEXT    NOT NULL,
+        note                        TEXT,
+        source                      TEXT    NOT NULL DEFAULT 'manual'
+                                            CHECK (source IN ('manual','ai_confirmed',
+                                                              'healthkit','imported')),
+        occurred_at                 TEXT    NOT NULL,
+        occurred_local_date         TEXT    NOT NULL,
+        occurred_tz                 TEXT    NOT NULL,
+        occurred_utc_offset_minutes INTEGER NOT NULL,
+        deleted_at                  TEXT,
+        created_at                  TEXT    NOT NULL,
+        updated_at                  TEXT    NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_wellbeing_logs_occurred
+        ON wellbeing_logs (user_id, occurred_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_wellbeing_logs_local_date
+        ON wellbeing_logs (user_id, occurred_local_date);
+
+      CREATE TABLE IF NOT EXISTS context_logs (
+        id                          TEXT    PRIMARY KEY,
+        user_id                     TEXT    NOT NULL,
+        context_type                TEXT    NOT NULL
+                                            CHECK (context_type IN ('stress','sleep_quality',
+                                                                    'exercise')),
+        value_numeric               INTEGER CHECK (value_numeric IS NULL
+                                                   OR value_numeric BETWEEN 1 AND 5),
+        value_text                  TEXT    CHECK (value_text IS NULL
+                                                   OR value_text IN ('none','light','moderate',
+                                                                     'intense')),
+        note                        TEXT,
+        source                      TEXT    NOT NULL DEFAULT 'manual'
+                                            CHECK (source IN ('manual','ai_confirmed',
+                                                              'healthkit','imported')),
+        occurred_at                 TEXT    NOT NULL,
+        occurred_local_date         TEXT    NOT NULL,
+        occurred_tz                 TEXT    NOT NULL,
+        occurred_utc_offset_minutes INTEGER NOT NULL,
+        deleted_at                  TEXT,
+        created_at                  TEXT    NOT NULL,
+        updated_at                  TEXT    NOT NULL,
+
+        -- Scaled types carry a number; exercise carries a level. Exactly one, never both.
+        CHECK (
+          (context_type IN ('stress','sleep_quality')
+             AND value_numeric IS NOT NULL AND value_text IS NULL)
+          OR (context_type = 'exercise'
+             AND value_text IS NOT NULL AND value_numeric IS NULL)
+        )
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_context_logs_occurred
+        ON context_logs (user_id, occurred_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_context_logs_local_date
+        ON context_logs (user_id, occurred_local_date, context_type);
+    `,
+  },
 ];
 
 /** Migrations that still need to run, in order. Pure — the unit under test. */
