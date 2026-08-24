@@ -615,7 +615,7 @@ importing native Swift architecture patterns here would be a mistake.
 | 2   | Design system + navigation shells + floating log action                                                           | Shell feels coherent on a physical iPhone                               | —                                         |
 | 3   | Auth (Apple + email OTP), boot restoration, logout                                                                | Repeated login/logout survives restarts                                 | Apple Sign-In capability                  |
 | 4   | Onboarding (all screens from spec §24–32)                                                                         | New user completes setup with no dead ends                              | —                                         |
-| 5   | Core offline logging + outbox + sync                                                                              | Logs created in airplane mode sync correctly on reconnect               | — (symptoms done; see §12.5)              |
+| 5   | Core offline logging + outbox + sync                                                                              | Logs created in airplane mode sync correctly on reconnect               | — (symptoms + meals done; §12.5–12.6)     |
 | 6   | Timeline: pagination, filters, edit/delete, sync badges                                                           | Smooth with a large synthetic dataset                                   | —                                         |
 | 7   | AI-assisted logging (photo/text/voice/journal)                                                                    | No confirmed health record is ever created without user confirmation    | AI provider account                       |
 | 8   | Deterministic pattern engine + 15 fixtures                                                                        | All fixtures produce the expected classifications                       | —                                         |
@@ -763,6 +763,45 @@ confirmation is the outstanding step, exactly as it was for M1 through M4.
 that hosts it — the engine implements all three operations already), the virtualized timeline,
 and the GutSignal Score. Five of the log sheet's six rows remain visibly and accessibly
 disabled rather than silently dead.
+
+### 12.6 Milestone 5 — meals (2026-08-24)
+
+The second log type, and the first **aggregate**. Verified on Windows: `expo-doctor` 21/21,
+`tsc --noEmit` clean, `eslint` clean, **292 tests passing**, iOS Metro bundle builds.
+
+| Area         | Delivered                                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema       | `meal_logs`, `meal_items`, `meal_tags` with RLS on all three, plus a composite foreign key tying every child to its parent's owner                              |
+| Atomic write | `public.upsert_meals` — `security invoker`, so RLS applies unchanged — writes parent, items and tags in one transaction (ADR-0034)                              |
+| Engine       | Generalised to drive `SyncEntity` implementations. Meals push through an RPC, symptoms through a table upsert, and the engine is indifferent to both (ADR-0035) |
+| Local        | Migration v4 mirrors all three tables; one outbox row represents the whole meal                                                                                 |
+| Repeat       | Spec §40 — recording a previous meal again produces a genuinely new meal with new ids, because the user ate twice and the engine must count two exposures       |
+| UI           | Meal sheet with quick time offsets, recent meals to repeat, free-text items parsed into a visible list, size, tags and a note. Today now interleaves both types |
+
+**Guarantees added to the tested set:**
+
+- a meal, its items, its tags and its outbox row commit together or not at all
+- **one** outbox row per meal, not one per table — the sync unit is the meal
+- re-upserting replaces a meal's contents rather than accumulating them, on both sides
+- a repeated meal cannot be rewritten by editing the original
+- items and tags load without an N+1
+- the RPC cannot write, or land on, another user's meal
+- items cannot be attached to another user's meal even by bypassing the RPC entirely
+
+**Deliberately not built.** The spec's other three meal modes — photo (§37), describe (§38) and
+speak (§39) — are all AI-driven and belong with the AI architecture at M7. Favourites and
+barcode (§42, a stated V1.1 feature) are also out. `canonical_factor_id` and `confidence` exist
+on `meal_items` but stay null until normalisation lands at M8.
+
+**Two tags from spec §41 were deliberately dropped.** `large meal` duplicates `meal_size`, and
+having both invites a meal tagged large but recorded small. `late meal` is derivable from
+`occurred_at`, so asking the user to assert it creates a second, contradictable source of truth
+for something the engine can compute exactly. Both are derivable at M8 without ever asking.
+
+**Still unverified, as for every milestone so far:** none of this has run on a device.
+
+**Remaining in M5:** bowel, wellbeing and context logging. Each is now a new `SyncEntity` plus
+its migration, RLS entry and fixtures — no engine changes.
 
 Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md`,
 `TEST_PLAN.md`, `AI_ARCHITECTURE.md` (M7), `PATTERN_ENGINE.md` (M8),

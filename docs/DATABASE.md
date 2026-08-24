@@ -133,6 +133,47 @@ it would push that work onto a service-role path, which is strictly worse.
 check that matters is not only "can user A insert as user B" but "can user A's upsert land on
 user B's row". `rls_isolation.sql` asserts both, and that user B's row is untouched either way.
 
+### Meals — migrations `20260824170000_meal_logs.sql`, `20260824170100_upsert_meals.sql`
+
+The first **aggregate**: `meal_logs` (the occasion), `meal_items` (what was eaten) and
+`meal_tags` (how it is described). Three tables rather than JSON columns, because the engine's
+central question — "what happened after coffee?" — becomes an index lookup at M8 and a text
+search over a blob otherwise (spec §78).
+
+`meal_logs` carries the same four occurrence columns, `source`, `deleted_at` tombstone and
+server-owned `updated_at` as `symptom_logs`, plus `title`, `meal_size`
+(`small` | `medium` | `large`), `note` and `photo_asset_id` (null until photo retention at M7).
+
+`meal_items` holds `raw_name` — the user's own words, **never overwritten** — alongside
+`canonical_factor_id` and `confidence`, both null until normalisation at M8, plus
+`user_confirmed` and `position`.
+
+`meal_tags` is one row per tag, checked against six values. `large` is deliberately absent
+(it is `meal_size`) and so is `late` (derivable from `occurred_at`) — see §12.6 of the plan.
+
+**The composite foreign key.** `meal_logs` has a redundant `unique (id, user_id)` whose only
+purpose is to be the target of `foreign key (meal_id, user_id)` on both children. Without it,
+RLS alone would allow a client to insert items carrying **their own** `user_id` but pointing at
+**someone else's** meal. That is not a data leak — the victim's policies still hide those rows —
+but it would let one account attach junk to another's records. The composite key makes it
+impossible rather than merely invisible.
+
+**`public.upsert_meals(jsonb)`.** The only client-callable function in the project. Takes an
+array of complete meals and writes each one — parent, items, tags — in a single transaction, so
+a meal can never reach the server without its contents. **`security invoker`**: it is a
+transaction boundary, not a privilege escalation, and can do nothing the caller could not do one
+statement at a time. `search_path` pinned empty, every name schema-qualified,
+`execute` revoked from `public` and `anon` and granted to `authenticated` only.
+
+**Policies:** select / insert / update / delete on `(select auth.uid()) = user_id` for
+`meal_logs` and `meal_items`; select / insert / delete for `meal_tags` (a tag is replaced, never
+edited in place). Children are checked on their own `user_id` rather than joining back to the
+parent — an index lookup per row instead of a subquery (§4.4).
+
+**Indexes:** `(user_id, occurred_at desc)`, `(user_id, occurred_local_date)` and
+`(user_id, updated_at)` on `meal_logs`; `(meal_id)` and `(user_id, canonical_factor_id)` on
+`meal_items`; `(user_id, tag)` on `meal_tags`.
+
 ## 3. Security verification
 
 `supabase/tests/rls_isolation.sql` is a self-contained, repeatable isolation test covering
@@ -182,9 +223,9 @@ email sign-in rather than shown a generic failure.
 
 ## 5. Planned tables
 
-Milestone 5 continues with the remaining logging tables (`meal_logs`, `meal_items`,
-`meal_tags`, `bowel_logs`, `wellbeing_logs`, `context_logs`, `journal_entries`) —
-`symptom_logs` landed first as the vertical slice (ADR-0030). Milestone 7 adds
+Milestone 5 continues with the remaining logging tables (`bowel_logs`, `wellbeing_logs`,
+`context_logs`, `journal_entries`) — `symptom_logs` landed first as the vertical slice
+(ADR-0030), then the meal tables as the first aggregate (ADR-0034). Milestone 7 adds
 `ai_extraction_candidates` and `ai_usage_events`, and Milestone 8 adds `factor_catalog`,
 `factor_aliases` and `pattern_findings`. Each arrives with its own migration, its own RLS
 policies, and its own entry in the isolation test — a table without both is not finished.

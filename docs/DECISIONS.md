@@ -722,3 +722,76 @@ carries no native import. `nodeSqlite.testing.ts` sits outside `__tests__/` so J
 collect it as a suite, and is never imported by application code — `node:sqlite` does not exist
 in Hermes. The shipped migrations, their constraints and their rollback behaviour are now
 executed on every test run.
+
+---
+
+## ADR-0034 — A meal is written and synced as one aggregate, through a Postgres function
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** A symptom is one row, so it syncs as a plain table upsert. A meal is three:
+`meal_logs`, `meal_items` and `meal_tags`. The outbox is keyed one row per record, so "what is
+the record?" had to be answered before meals could sync at all.
+
+**Alternatives considered.** (a) One outbox row per table, pushed in foreign-key order.
+(b) Denormalise items and tags into JSONB columns on `meal_logs`. (c) One outbox row for the
+whole aggregate, written server-side by a Postgres function in a single transaction.
+
+**Reason.** (c).
+
+(a)'s failure mode is not a harmless partial write. A meal that reaches the server without its
+items reads to the pattern engine as an eating occasion with **no exposures** — a data point
+that never happened, quietly weakening every comparison drawn from it. A retry would fix it
+eventually, but "eventually" includes a window in which a second device and the engine both see
+it. It also costs three or more round trips per meal.
+
+(b) removes the problem by removing the structure, and would have to be undone at M8:
+`PROJECT_PLAN.md` §4.5 indexes `(user_id, canonical_factor_id)` on `meal_items` precisely so
+exposure lookup is an index scan, and spec §78 warns against JSON blobs in this exact place.
+
+**Consequences.** `public.upsert_meals(jsonb)` takes an array of complete meals and writes each
+one — parent, items, tags — inside one transaction. It is **`security invoker`**, so RLS applies
+exactly as it would to a direct insert: the function is a transaction boundary, not a privilege
+escalation, and can do nothing the caller could not already do one statement at a time. Its
+`search_path` is pinned empty with every name schema-qualified.
+
+Items and tags are **replaced wholesale rather than diffed**, on both sides. The client always
+sends the complete aggregate and ids are device-generated and stable, so a diff would only add a
+second place where "what is in this meal?" gets decided.
+
+This is the project's first client-callable RPC. The bar for adding another is the same one it
+cleared: a write that must be atomic across tables, which PostgREST cannot express.
+
+**A consequence worth stating separately.** `meal_logs` carries a redundant `unique (id, user_id)`
+so the children can reference it with a **composite foreign key** `(meal_id, user_id)`. Without
+it, RLS alone would let a client insert items carrying their own `user_id` but pointing at
+someone else's meal. That is not a data leak — the victim's policies still hide those rows — but
+it would let one account attach junk to another's records. The composite key makes it impossible
+rather than merely invisible, and `rls_isolation.sql` asserts it by bypassing the function and
+writing the table directly.
+
+---
+
+## ADR-0035 — The sync engine drives entities, not tables it knows about
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** The engine shipped with symptom logging hardcoded `symptom_logs`: it imported the
+symptom repository directly and took a `SymptomRemote`. Adding meals meant either duplicating it
+or generalising it.
+
+**Alternatives considered.** (a) A second engine instance per log type. (b) Add meal-shaped
+branches to the existing one. (c) A `SyncEntity` interface the engine drives without knowing what
+any of them are.
+
+**Reason.** (c). (a) multiplies the concurrency guard, the reconnection subscription and the
+crash recovery — three things that must happen exactly once — by the number of log types. (b)
+grows a switch statement in the one module where a mistake loses user data.
+
+**Consequences.** An entity owns one outbox table name, one cursor, and four operations: upsert,
+fetch-changed-since, and apply. The engine owns batching, backoff, claim recovery, coalescing and
+ordering. Meals and symptoms differ completely in how they reach the server — an RPC versus a
+table upsert — and the engine is indifferent to that.
+
+Three log types remain (bowel, wellbeing, context). Each is now a new entity plus its migration,
+RLS entry and fixtures, with no change to the engine at all.
