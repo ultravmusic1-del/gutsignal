@@ -1,122 +1,86 @@
-import Constants from 'expo-constants';
+import { Redirect } from 'expo-router';
 import { View } from 'react-native';
 
-import { useAppBoot } from '@/boot/useAppBoot';
-import { Card, Divider, Screen, Text } from '@/components/ui';
+import { useAppBoot, type BootFailureKind } from '@/boot/useAppBoot';
+import { Card, Screen, Text } from '@/components/ui';
 import { useTheme } from '@/theme';
 
 /**
- * Milestone 1 foundation screen.
+ * Boot gate. The app routes exactly once, from here, after the boot sequence resolves
+ * (spec §20) — which is what prevents the auth/navigation flicker of deciding routes inside
+ * several providers.
  *
- * This is not the product's home screen — Today/Timeline/Insights/You arrive with the
- * navigation shells in Milestone 2. Its job is to prove, on a physical iPhone, that the
- * development build boots: design tokens render, safe areas and Dynamic Type behave, and the
- * boot sequence reports honestly.
- *
- * Deliberately no buttons: there is nothing here to do yet, and a dead control would violate
- * the "no placeholder actions" rule (CLAUDE.md §57).
+ * Milestone 3 adds the branch to the welcome/auth flow for `unauthenticated`. Until sign-in
+ * exists, a booted app goes straight to the tab shell.
  */
-export default function FoundationScreen() {
-  const theme = useTheme();
+export default function BootGate() {
   const boot = useAppBoot();
+
+  if (boot.state === 'booting') {
+    // Deliberately blank: the native splash is still up, and rendering a second loading
+    // treatment here would produce a visible flash between the two.
+    return <Screen />;
+  }
+
+  if (boot.state === 'configuration_error') {
+    return <BootFailure problems={boot.problems} kind={boot.failureKind ?? 'environment'} />;
+  }
+
+  return <Redirect href="/(tabs)/today" />;
+}
+
+/**
+ * The two failure causes get different copy, because they have different audiences and
+ * different remedies. Telling a user with a broken database to "check .env" is worse than
+ * saying nothing.
+ */
+const FAILURE_COPY: Record<BootFailureKind, { title: string; body: string; footer: string }> = {
+  environment: {
+    title: "This build isn't configured",
+    body: 'The app cannot reach its backend because required configuration is missing. This is a build-time problem, not something a user can fix.',
+    footer: 'Set these in .env (see .env.example) and restart the bundler.',
+  },
+  storage: {
+    title: "GutSignal can't start",
+    body: 'The app stores your entries on this device, and that storage could not be opened. Nothing you have logged has been deleted.',
+    footer:
+      'Try restarting the app. If it keeps happening, restarting the device or freeing up storage space usually helps.',
+  },
+};
+
+function BootFailure({ problems, kind }: { problems: string[]; kind: BootFailureKind }) {
+  const theme = useTheme();
+  const copy = FAILURE_COPY[kind];
 
   return (
     <Screen scroll>
-      <View style={{ gap: theme.spacing.xl, paddingVertical: theme.spacing.xxl }}>
-        <View style={{ gap: theme.spacing.xs }}>
+      <View style={{ gap: theme.spacing.lg, paddingTop: theme.spacing.xxl }}>
+        <View style={{ gap: theme.spacing.xxs }}>
           <Text variant="overline" color="accent">
             GUTSIGNAL
           </Text>
-          <Text variant="display">Foundation</Text>
+          <Text variant="title">{copy.title}</Text>
           <Text variant="body" color="secondary">
-            Understand your gut. Stop guessing.
+            {copy.body}
           </Text>
         </View>
 
         <Card>
-          <Text variant="cardTitle">Boot sequence</Text>
-          <View style={{ height: theme.spacing.sm }} />
-
-          {boot.steps.map((step, index) => (
-            <View key={step.id}>
-              {index > 0 ? (
-                <View style={{ paddingVertical: theme.spacing.sm }}>
-                  <Divider />
-                </View>
-              ) : null}
-
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: theme.spacing.md,
-                }}
-              >
-                <Text variant="body">{step.label}</Text>
-
-                {/* Status is carried by the WORD, not by colour alone (CLAUDE.md §36). */}
-                <Text
-                  variant="caption"
-                  color={
-                    step.status === 'ok'
-                      ? 'positive'
-                      : step.status === 'failed'
-                        ? 'danger'
-                        : 'secondary'
-                  }
-                  accessibilityLabel={`${step.label}: ${statusLabel(step.status)}`}
-                >
-                  {statusLabel(step.status)}
-                </Text>
-              </View>
-            </View>
+          <Text variant="cardTitle">
+            {kind === 'environment' ? 'Missing or invalid' : 'Details'}
+          </Text>
+          <View style={{ height: theme.spacing.xs }} />
+          {problems.map((problem) => (
+            <Text key={problem} variant="body" color="secondary">
+              • {problem}
+            </Text>
           ))}
-        </Card>
-
-        {boot.problems.length > 0 ? (
-          <Card>
-            <Text variant="cardTitle" color="danger">
-              Configuration needs attention
-            </Text>
-            <View style={{ height: theme.spacing.xs }} />
-            {boot.problems.map((problem) => (
-              <Text key={problem} variant="caption" color="secondary">
-                • {problem}
-              </Text>
-            ))}
-            <View style={{ height: theme.spacing.sm }} />
-            <Text variant="caption" color="tertiary">
-              Set these in .env — see .env.example.
-            </Text>
-          </Card>
-        ) : null}
-
-        <Card elevation="flat">
-          <Text variant="caption" color="secondary">
-            Boot state
-          </Text>
-          <Text variant="bodyStrong">{boot.state}</Text>
-          <View style={{ height: theme.spacing.sm }} />
-          <Text variant="caption" color="secondary">
-            Version
-          </Text>
-          <Text variant="bodyStrong">
-            {Constants.expoConfig?.version ?? 'unknown'} · {theme.scheme} appearance
+          <View style={{ height: theme.spacing.md }} />
+          <Text variant="caption" color="tertiary">
+            {copy.footer}
           </Text>
         </Card>
       </View>
     </Screen>
   );
-}
-
-function statusLabel(status: 'pending' | 'ok' | 'failed'): string {
-  switch (status) {
-    case 'ok':
-      return 'Ready';
-    case 'failed':
-      return 'Failed';
-    case 'pending':
-      return 'Checking…';
-  }
 }

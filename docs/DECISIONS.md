@@ -534,3 +534,33 @@ sidesteps font licensing. The hierarchy is carried by the type scale in `src/the
 **Consequences.** GutSignal will not have a proprietary type signature at launch; brand
 identity rests on colour, spacing, shape and illustration. Revisit only if brand work later
 demands it — and then budget for the licence, the loading state, and Dynamic Type testing.
+
+---
+
+## ADR-0027 — Web is not a target; the physical device is the verification path
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** With no macOS and no iOS simulator, there is no way to _look at_ the UI on the
+development machine. Expo's web target was trialled during Milestone 2 as a design-iteration
+preview, to avoid spending an EAS build cycle on every visual change.
+
+**Alternatives considered.** (a) Keep `react-native-web` and configure the extra plumbing that
+`expo-sqlite` needs on web (WASM asset resolution plus COOP/COEP headers). (b) Keep web as a
+genuine product target.
+
+**Reason.** The trial did not survive contact with the app's own architecture: the boot
+sequence opens a local SQLite database, which does not open on web without additional
+configuration. Even if that were fixed, the milestones ahead add RevenueCat, HealthKit and
+Apple authentication — all native-only. A web preview would break permanently within a few
+milestones while accumulating configuration that ships to nobody. (b) is out of scope entirely.
+
+**Consequences.** `react-native-web` and `@expo/metro-runtime` were removed. Visual
+verification happens on a physical iPhone via a development build, which is why physical-device
+QA starts at Milestone 1 rather than release week (ADR-0004). Logic, accessibility semantics
+and copy remain verifiable on Windows through unit and React Native Testing Library tests.
+
+**Worth keeping from the trial.** It exposed a real defect: when the database step hung rather
+than failing, the app sat on a blank screen indefinitely with nothing to act on. Boot steps are
+now bounded by a timeout, and a storage failure reports different copy from a configuration
+failure — the fix outlived the tool that found it.

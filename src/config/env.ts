@@ -53,7 +53,13 @@ export function parseEnv(input: Record<string, string | undefined>): EnvResult {
 
   const problems = result.error.issues.map((issue) => {
     const key = issue.path.join('.');
-    return `${envVarName(key)} ${issue.message}`;
+    // Zod's default for an absent value is "expected string, received undefined", which is
+    // accurate and useless to the person who has to fix it. Say what to do instead.
+    // Checked against the raw input rather than the issue object, so this does not depend on
+    // Zod's internal issue shape.
+    const detail = input[key] === undefined ? 'is not set' : issue.message;
+
+    return `${envVarName(key)} ${detail}`;
   });
 
   return { ok: false, problems };

@@ -24,8 +24,8 @@ describe('environment validation', () => {
 
     expect(result.problems).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('EXPO_PUBLIC_SUPABASE_URL'),
-        expect.stringContaining('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'),
+        'EXPO_PUBLIC_SUPABASE_URL is not set',
+        'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY is not set',
       ])
     );
   });

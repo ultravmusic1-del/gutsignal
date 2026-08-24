@@ -28,7 +28,22 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <ErrorBoundary>
               <StatusBar style="auto" />
-              <Stack screenOptions={{ headerShown: false }} />
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(tabs)" />
+                {/* The log flow is a native form sheet: platform drag-to-dismiss and
+                    detents, not a hand-rolled modal. Every logging screen enters here. */}
+                <Stack.Screen
+                  name="log/index"
+                  options={{
+                    presentation: 'formSheet',
+                    sheetAllowedDetents: 'fitToContents',
+                    sheetCornerRadius: 28,
+                    sheetGrabberVisible: true,
+                    headerShown: false,
+                  }}
+                />
+              </Stack>
             </ErrorBoundary>
           </QueryClientProvider>
         </ThemeProvider>

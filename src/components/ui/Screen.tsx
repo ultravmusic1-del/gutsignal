@@ -5,13 +5,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 
 export type ScreenProps = {
-  children: ReactNode;
+  /** Optional so a screen can render as a plain themed background (e.g. the boot gate). */
+  children?: ReactNode;
   /** Scrollable content. Use `false` for screens that manage their own list. */
   scroll?: boolean;
   /** Inverted charcoal background — welcome and onboarding hero screens. */
   inverse?: boolean;
   /** Removes the default horizontal gutter (full-bleed lists, charts). */
   bleed?: boolean;
+  /** Adds clearance so content can scroll clear of the floating navigation. */
+  floatingNav?: boolean;
   contentStyle?: ViewStyle;
 };
 
@@ -24,6 +27,7 @@ export function Screen({
   scroll = false,
   inverse = false,
   bleed = false,
+  floatingNav = false,
   contentStyle,
 }: ScreenProps) {
   const theme = useTheme();
@@ -33,7 +37,7 @@ export function Screen({
 
   const content: ViewStyle = {
     paddingTop: insets.top,
-    paddingBottom: insets.bottom,
+    paddingBottom: insets.bottom + (floatingNav ? FLOATING_NAV_CLEARANCE : 0),
     paddingHorizontal: bleed ? 0 : theme.spacing.gutter,
   };
 
@@ -56,6 +60,9 @@ export function Screen({
     </View>
   );
 }
+
+/** Floating pill height (60) plus breathing room, so content never hides behind it. */
+const FLOATING_NAV_CLEARANCE = 84;
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },

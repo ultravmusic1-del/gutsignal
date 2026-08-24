@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { envResult } from '@/config/env';
 import { openDatabase } from '@/services/db/database';
+import { withTimeout } from '@/utils/promise';
 
 /**
  * Deterministic application boot (spec §20).
@@ -24,12 +25,23 @@ export type BootStep = {
   detail?: string;
 };
 
+/**
+ * Why boot failed. The two causes need different explanations: a missing environment
+ * variable is a build problem the developer fixes, while a local database that will not open
+ * is a device problem the user might resolve by restarting or freeing space.
+ */
+export type BootFailureKind = 'environment' | 'storage';
+
 export type BootResult = {
   state: AppBootState;
   steps: BootStep[];
-  /** Operator-facing problems (misconfiguration). Never contains user data. */
+  /** Operator-facing problems. Never contains user data. */
   problems: string[];
+  failureKind?: BootFailureKind;
 };
+
+/** Generous enough for a cold start on an old device, short enough to fail visibly. */
+const DATABASE_OPEN_TIMEOUT_MS = 10_000;
 
 export function useAppBoot(): BootResult {
   const [result, setResult] = useState<BootResult>({
@@ -55,13 +67,16 @@ export function useAppBoot(): BootResult {
             { id: 'db', label: 'Local database', status: 'pending' },
           ],
           problems: envResult.problems,
+          failureKind: 'environment',
         });
         return;
       }
 
-      // 2. Local database (must succeed — it is the write target for every log)
+      // 2. Local database (must succeed — it is the write target for every log).
+      // Bounded: a dependency that hangs rather than fails would leave the user on a blank
+      // screen with nothing to act on.
       try {
-        await openDatabase();
+        await withTimeout(openDatabase(), DATABASE_OPEN_TIMEOUT_MS, 'Local database');
       } catch (error) {
         if (cancelled) return;
         setResult({
@@ -75,7 +90,8 @@ export function useAppBoot(): BootResult {
               detail: error instanceof Error ? error.message : 'Unknown error',
             },
           ],
-          problems: ['The local database could not be opened.'],
+          problems: ['The local database could not be opened on this device.'],
+          failureKind: 'storage',
         });
         return;
       }

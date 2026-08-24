@@ -1,6 +1,6 @@
 # GutSignal — Project Plan
 
-**Status:** Milestone 0 accepted · Milestone 1 (foundation) implemented — device verification pending
+**Status:** Milestones 0–2 implemented — physical-device verification pending
 **Author:** Claude Code (principal engineer role)
 **Created:** 2026-08-24
 **Last updated:** 2026-08-24
@@ -661,6 +661,28 @@ clean, 65 tests passing:
 - Steps 3–11 of the boot sequence (session restore, RevenueCat, profile, onboarding check,
   cache hydration, sync, analytics) land at their own milestones; `useAppBoot` is the single
   place ordering lives, so they slot in without a provider race.
+
+### 12.2 Milestone 2 status (2026-08-24)
+
+**Built and verified on Windows** — `expo-doctor` 21/21, `tsc --noEmit` clean, `eslint` clean,
+97 tests passing, iOS Metro bundle builds (1857 modules):
+
+| Area               | Delivered                                                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation         | Floating dark pill with the four destinations (JS tabs, not `NativeTabs`, because the pill must hover over content); the log action is a **separate** circular control beside it, never a fifth tab |
+| Icons              | Original minimal-stroke SVG set (`src/components/ui/Icon.tsx`) — not SF Symbols, so geometry is identical when Android arrives                                                                      |
+| Shells             | Today, Timeline (working filter row), Insights, You — each with designed empty states and real product copy                                                                                         |
+| Sheet architecture | Log flow presented as a native `formSheet` with `fitToContents` detent, grabber and drag-to-dismiss; every future logging screen enters through it                                                  |
+| Boot gate          | `app/index.tsx` routes once after boot resolves; distinct copy for configuration vs storage failure                                                                                                 |
+| Safety             | `src/domain/patterns/status.ts` holds the five permitted pattern statuses and their copy, with a test that scans all shipped source for causal/diagnostic phrasing                                  |
+
+**Deliberately not built:** GutSignal Score, quick-log tiles, timeline entries, findings. All of
+them require data or the engine, and rendering them with invented numbers is the fake-data
+placeholder the spec forbids. The log sheet's rows are visibly and accessibly disabled with an
+honest note rather than silently doing nothing.
+
+**Outstanding:** the acceptance criterion — "the shell feels coherent and polished on a
+physical iPhone" — is unverified. Nothing has been seen on a device yet.
 
 Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md` (M1),
 `DATABASE.md` (M1), `PATTERN_ENGINE.md` (M8), `AI_ARCHITECTURE.md` (M7),
