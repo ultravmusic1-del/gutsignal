@@ -90,6 +90,49 @@ these are user-managed content rather than account identity.
 
 ---
 
+### `public.symptom_logs` — migration `20260824140000_symptom_logs.sql`
+
+The first user **event** table, and the template the remaining log tables follow.
+
+| Column                        | Type                                | Notes                                                                        |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------- |
+| `id`                          | `uuid` PK                           | **Generated on the device**, before the network is involved                  |
+| `user_id`                     | `uuid` not null                     | FK → `auth.users(id)` `on delete cascade`                                    |
+| `symptom_type`                | `text` not null                     | Checked against the same keys as `SYMPTOM_KEYS`; a test asserts parity       |
+| `severity`                    | `smallint` not null                 | `between 1 and 10`. An intensity the user reported, never a clinical grade   |
+| `note`                        | `text`                              | ≤ 1000 chars. Longer belongs in a journal entry (M7)                         |
+| `source`                      | `text` not null, default `'manual'` | `manual`                                                                     | `ai_confirmed` | `healthkit` | `imported` |
+| `occurred_at`                 | `timestamptz` not null              | The instant — gives ordering                                                 |
+| `occurred_local_date`         | `date` not null                     | The user's calendar day, computed on the device — gives day grouping         |
+| `occurred_tz`                 | `text` not null                     | IANA zone they were in, so the above is reconstructable                      |
+| `occurred_utc_offset_minutes` | `smallint` not null                 | Offset then in force; disambiguates a repeated local hour at a DST fall-back |
+| `deleted_at`                  | `timestamptz`                       | Tombstone. Set instead of deleting, so the deletion replicates               |
+| `created_at` / `updated_at`   | `timestamptz` not null              | `updated_at` maintained by trigger on **insert and update**                  |
+
+**Why four occurrence columns.** Storing only the instant makes "today" ambiguous after travel
+or a DST change; storing only local time loses ordering. Day grouping and every pattern-engine
+window read `occurred_local_date`, never the UTC date. This is risk R-02 — see ADR-0031.
+
+**Why `updated_at` is server-owned on insert too.** Unlike `profiles`, this table is pulled
+incrementally: the sync cursor asks for "everything changed at or after this timestamp". If a
+device with a wrong clock could set its own `updated_at`, it could place a row permanently
+behind every other device's cursor and make it invisible to them.
+`private.set_updated_at_always()` therefore fires `before insert or update`.
+
+**Indexes:** `(user_id, occurred_at desc)` for timeline pagination,
+`(user_id, occurred_local_date)` for day grouping, `(user_id, updated_at)` for the sync pull.
+
+**Policies:** select / insert / update / delete on `(select auth.uid()) = user_id`, scoped
+`to authenticated`.
+
+**Why DELETE is granted here but not on `profiles`.** The app tombstones rather than deletes, but
+account deletion and a future "erase this entry permanently" both need a real delete. Withholding
+it would push that work onto a service-role path, which is strictly worse.
+
+**The threat specific to device-generated ids.** Because the client chooses the primary key, the
+check that matters is not only "can user A insert as user B" but "can user A's upsert land on
+user B's row". `rls_isolation.sql` asserts both, and that user B's row is untouched either way.
+
 ## 3. Security verification
 
 `supabase/tests/rls_isolation.sql` is a self-contained, repeatable isolation test covering
@@ -139,8 +182,9 @@ email sign-in rather than shown a generic failure.
 
 ## 5. Planned tables
 
-Milestone 5 adds the logging tables (`meal_logs`, `meal_items`, `meal_tags`, `symptom_logs`,
-`bowel_logs`, `wellbeing_logs`, `context_logs`, `journal_entries`), Milestone 7 adds
+Milestone 5 continues with the remaining logging tables (`meal_logs`, `meal_items`,
+`meal_tags`, `bowel_logs`, `wellbeing_logs`, `context_logs`, `journal_entries`) —
+`symptom_logs` landed first as the vertical slice (ADR-0030). Milestone 7 adds
 `ai_extraction_candidates` and `ai_usage_events`, and Milestone 8 adds `factor_catalog`,
 `factor_aliases` and `pattern_findings`. Each arrives with its own migration, its own RLS
 policies, and its own entry in the isolation test — a table without both is not finished.

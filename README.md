@@ -54,6 +54,7 @@ See ADR-0023.
 Runtime: `expo` · `expo-router` · `react-native` · `@supabase/supabase-js` ·
 `@tanstack/react-query` · `zustand` · `zod` · `react-hook-form` + `@hookform/resolvers` ·
 `expo-sqlite` · `expo-secure-store` · `expo-apple-authentication` · `expo-haptics` ·
+`expo-network` · `expo-crypto` ·
 `react-native-svg` · `react-native-reanimated` · `react-native-gesture-handler` ·
 `react-native-safe-area-context` · `react-native-screens`
 
@@ -62,6 +63,11 @@ Dev: `jest-expo` · `jest` · `@testing-library/react-native` · `test-renderer`
 
 > `test-renderer` (not `react-test-renderer`) is required by RNTL v14, and its `render` is
 > **async** — `await render(...)` in every component test.
+>
+> The offline layer is tested against **real SQLite** using Node's built-in `node:sqlite`, so
+> transactions, constraints and rollback are exercised for real. Those suites carry a
+> `@jest-environment node` docblock; without it the built-in module is unavailable. See
+> ADR-0033.
 
 ---
 
@@ -109,20 +115,22 @@ or the CLI. RLS isolation tests: `supabase/tests/rls_isolation.sql`.
 
 ## Current state
 
-**Milestones 0–4 complete.** 126 tests passing, `expo-doctor` 21/21, iOS bundle builds.
+**Milestones 0–4 complete. Milestone 5 in progress** — symptom logging works end to end,
+offline. 245 tests passing, `expo-doctor` 21/21, iOS bundle builds.
 
-| #   | Milestone              | State                                                                     |
-| --- | ---------------------- | ------------------------------------------------------------------------- |
-| 0   | Technical audit        | Done — plan, 29 ADRs, Windows/iOS workflow                                |
-| 1   | Foundation             | Done — theme, UI primitives, boot sequence, Supabase client, local SQLite |
-| 2   | Design system + shells | Done — floating nav, four tabs, log sheet                                 |
-| 3   | Auth                   | Done — Apple + email OTP, `profiles` table, RLS verified                  |
-| 4   | Onboarding             | Done — full flow, preferences schema, RLS verified                        |
-| 5   | Offline logging        | **Next**                                                                  |
+| #   | Milestone              | State                                                                             |
+| --- | ---------------------- | --------------------------------------------------------------------------------- |
+| 0   | Technical audit        | Done — plan, 29 ADRs, Windows/iOS workflow                                        |
+| 1   | Foundation             | Done — theme, UI primitives, boot sequence, Supabase client, local SQLite         |
+| 2   | Design system + shells | Done — floating nav, four tabs, log sheet                                         |
+| 3   | Auth                   | Done — Apple + email OTP, `profiles` table, RLS verified                          |
+| 4   | Onboarding             | Done — full flow, preferences schema, RLS verified                                |
+| 5   | Offline logging        | **In progress** — symptoms done end to end; meals, bowel, wellbeing, context next |
 
 **Nothing has ever run on a physical device.** All verification so far is tests, bundling and
 direct database checks. Milestone 5's acceptance criterion (log in airplane mode, reconnect,
-verify sync) cannot be met without one.
+verify sync) cannot be met without one — the offline guarantees are covered by tests against a
+real SQL engine, but no log has been made on a phone.
 
 ---
 

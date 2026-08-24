@@ -35,7 +35,7 @@ test/lint harness) has since been added; see §12.1 for what is and is not done.
 | Resource                   | Installed?                                   | Notes                                                                                                                                                                                                                                                             |
 | -------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Supabase agent skills      | **Yes** (vendored in `.agents/skills/`)      | `supabase`, `supabase-postgres-best-practices`. Use for RLS, migrations, Edge Functions, Postgres performance.                                                                                                                                                    |
-| Supabase MCP server        | Yes (session tools)                          | Connected to project mrqxmkxhyohlywiziofz. Used to apply migrations, run the RLS isolation test and check security advisors.                                                                                                                                                                 |
+| Supabase MCP server        | Yes (session tools)                          | Connected to project mrqxmkxhyohlywiziofz. Used to apply migrations, run the RLS isolation test and check security advisors.                                                                                                                                      |
 | Expo skills                | Available but **not yet consulted**          | Loading the Expo skill was declined in this session. All Expo/EAS facts below were instead verified against the npm registry (see §1). **Recommendation: allow the Expo skill before Milestone 1**, since it is the correct authority for EAS workflow specifics. |
 | RevenueCat skills / MCP    | Skills listed; **MCP requires OAuth**        | The RevenueCat MCP server is unauthenticated in this session. Owner must authorize it (or supply dashboard config) before Milestone 12.                                                                                                                           |
 | Software Mansion RN skills | Listed (`react-native-best-practices`, etc.) | Use during Milestones 2, 6, 17 (animation, gestures, performance).                                                                                                                                                                                                |
@@ -615,7 +615,7 @@ importing native Swift architecture patterns here would be a mistake.
 | 2   | Design system + navigation shells + floating log action                                                           | Shell feels coherent on a physical iPhone                               | —                                         |
 | 3   | Auth (Apple + email OTP), boot restoration, logout                                                                | Repeated login/logout survives restarts                                 | Apple Sign-In capability                  |
 | 4   | Onboarding (all screens from spec §24–32)                                                                         | New user completes setup with no dead ends                              | —                                         |
-| 5   | Core offline logging + outbox + sync                                                                              | Logs created in airplane mode sync correctly on reconnect               | —                                         |
+| 5   | Core offline logging + outbox + sync                                                                              | Logs created in airplane mode sync correctly on reconnect               | — (symptoms done; see §12.5)              |
 | 6   | Timeline: pagination, filters, edit/delete, sync badges                                                           | Smooth with a large synthetic dataset                                   | —                                         |
 | 7   | AI-assisted logging (photo/text/voice/journal)                                                                    | No confirmed health record is ever created without user confirmation    | AI provider account                       |
 | 8   | Deterministic pattern engine + 15 fixtures                                                                        | All fixtures produce the expected classifications                       | —                                         |
@@ -723,6 +723,46 @@ ADR-0029.
 
 **Not verified:** no one has completed onboarding on a device. The flow is verified by unit
 tests, the database is verified directly, but the two have never met.
+
+### 12.5 Milestone 5 status (2026-08-24) — first vertical slice
+
+M5 is being built one log type at a time (ADR-0030). **Symptoms are complete end to end**;
+meals, bowel, wellbeing and context follow as repetitions of the same proven path.
+
+**Built and verified on Windows** — `expo-doctor` 21/21, `tsc --noEmit` clean, `eslint` clean,
+**245 tests passing** (up from 126), iOS Metro bundle builds:
+
+| Area          | Delivered                                                                                                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema        | `public.symptom_logs` with four occurrence columns, tombstones, RLS and three indexes. Applied to the live project; security advisors clean                                        |
+| Security      | `rls_isolation.sql` extended, including the threat unique to device-generated ids — an upsert aimed at another user's row id. Run against the live project with a negative control |
+| Occurrence    | `domain/time/occurrence.ts` — pure; 23 tests covering both DST boundaries, travel, midnight either side, and half/quarter-hour zones (risk R-02)                                   |
+| Outbox        | Coalescing (one row per record), claim-and-mark, exponential backoff with jitter, crash recovery for rows stranded mid-push                                                        |
+| Sync engine   | Framework-free, dependencies injected. Batch push with per-row isolation on failure, cursor pull, last-writer-wins merge that never clobbers an unpushed local edit                |
+| Local storage | Migrations v2 and v3: the `symptom_logs` mirror, `sync_cursors`, and a unique index enforcing one outbox row per record                                                            |
+| UI            | Symptom form (chips, 1–10 scale with named intensity, quick time offsets, optional note) behind the log sheet; Today lists the day's entries with a quiet "not yet synced" line    |
+| Test approach | The offline layer now runs against **real SQLite** via Node 24's `node:sqlite` — real transactions, constraints and rollback, with no new dependency (ADR-0033)                    |
+
+**Guarantees now covered by tests rather than by intent:**
+
+- a log and its outbox row commit together — if the outbox write fails, the log does not exist
+- syncing the same log twice does not duplicate it on the server
+- being offline does not burn a retry attempt or push the backoff out
+- one log the server rejects does not block the rest of the queue
+- a crash mid-push returns the row to the queue rather than stranding it
+- a pull never overwrites an edit that has not been pushed yet
+- a deletion replicates as a tombstone rather than as a row that quietly never arrived
+- an evening log in a western zone is filed under the day the user lived, not the UTC day
+
+**Not verified — and this is the milestone's own acceptance criterion.** No log has been
+created on a device, in airplane mode or otherwise. That needs the Apple Developer enrolment
+and a registered iPhone. Everything buildable on Windows is done and green; the airplane-mode
+confirmation is the outstanding step, exactly as it was for M1 through M4.
+
+**Deliberately not built:** the other five log types, edit/delete **UI** (M6 owns the timeline
+that hosts it — the engine implements all three operations already), the virtualized timeline,
+and the GutSignal Score. Five of the log sheet's six rows remain visibly and accessibly
+disabled rather than silently dead.
 
 Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md`,
 `TEST_PLAN.md`, `AI_ARCHITECTURE.md` (M7), `PATTERN_ENGINE.md` (M8),

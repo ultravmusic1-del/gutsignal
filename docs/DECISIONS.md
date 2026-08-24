@@ -613,3 +613,112 @@ tracking-style → philosophy → account → complete`. Milestone 13 inserts th
 screen before `complete`, where it will be fully functional, and the progress indicator will
 gain a step. Recorded here so the deviation from §19's route list is deliberate and traceable
 rather than an omission.
+
+---
+
+## ADR-0030 — Milestone 5 lands as a vertical slice, symptoms first
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** Milestone 5 is "core offline logging + outbox + sync" across five log types
+(meals, symptoms, bowel, wellbeing, context) plus the sync engine, five migrations and the RLS
+suite for each. Building it in one pass produces a change set too large to review and delays
+the first evidence that the offline architecture works at all.
+
+**Alternatives considered.** (a) All five log types at once. (b) The sync engine alone, tested
+headlessly against a scratch table, with logging screens in a second pass. (c) One log type end
+to end, then repeat.
+
+**Reason.** (c), per CLAUDE.md §50 step 3. (a) is the unreviewable rewrite. (b) defers the only
+thing that proves the design — a real user-owned table, with real RLS, written offline and
+reconciled — and risks an engine shaped around a scratch table rather than a real one.
+
+Symptoms were chosen over the simpler one-tap wellbeing log precisely because they are harder:
+a real form, a severity scale, and a user-chosen occurrence time, which is what forces the
+timezone handling that risk R-02 calls the most likely source of silent corruption here.
+
+**Consequences.** Meals, bowel, wellbeing and context follow as repetitions of a proven path;
+each still needs its own migration, RLS entry and fixtures. The log sheet keeps five of its six
+rows visibly disabled in the meantime, which is the honest state rather than a dead control.
+
+---
+
+## ADR-0031 — Sync is bidirectional from the first slice, not push-only
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** `PROJECT_PLAN.md` §6 specifies the push path in full — SQLite write, durable
+outbox, idempotent upsert — and says nothing about a pull. With push only, local storage is the
+sole source for the UI, so a reinstall or a second device shows an empty timeline even though
+every row is safe in Postgres.
+
+**Alternatives considered.** (a) Push only, add a pull at M6 with the timeline. (b) Push only,
+treat restore-on-reinstall as part of M16's privacy and portability work. (c) Push and a
+cursor-based pull together.
+
+**Reason.** (c). The merge rule and the write path are the same design decision — "last writer
+wins on `updated_at`, except that an unpushed local change outranks the server" is meaningless
+without both halves. Designing the read path after the write path had shipped would mean
+retrofitting conflict resolution onto data already in users' hands.
+
+**Consequences.** `sync_cursors` holds one watermark per table. The cursor is **inclusive**
+(`>=`, not `>`): two rows can share a timestamp, and re-applying a row is free because
+`applyServerRows` is idempotent, whereas skipping one would be a silent hole in the user's
+history. `symptom_logs.updated_at` is therefore server-maintained on insert as well as update,
+so the watermark advances on one trusted clock and a device with a wrong clock cannot write
+itself permanently behind every other device's cursor.
+
+---
+
+## ADR-0032 — `expo-network` for connectivity
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** The outbox needs to know when connectivity returns; M5's acceptance criterion is
+that a log made in airplane mode syncs on reconnect. Nothing in the project detected network
+state.
+
+**Alternatives considered.** (a) `expo-network`. (b) No dependency — drain on foreground and on
+backoff only. (c) `@react-native-community/netinfo`.
+
+**Reason.** (a), and it passes every §38 check: Expo already solves it, it is first-party and
+SDK-pinned (`~57.0.1`), New Architecture ready, and adds no privacy surface. (b) means a user
+switching off airplane mode waits for a backoff tick rather than syncing immediately, which
+makes the product's core reliability promise feel broken even though it is not. (c) reports
+true internet reachability rather than interface state — genuinely better for captive portals —
+but is not version-managed by Expo, against §39.
+
+It was added deliberately **before** the first development build exists, when a new native
+module costs nothing; afterwards it would cost a full EAS cycle (risk R-03).
+
+**Consequences.** The engine depends on a three-method `NetworkMonitor` interface, not on the
+module, so tests inject a fake and a later swap to reachability probing touches one file.
+Connectivity is treated as a hint: if the platform will not say, the engine assumes reachable
+and lets the request decide, because refusing to try would strand logs.
+
+---
+
+## ADR-0033 — The offline layer is tested against real SQLite via `node:sqlite`
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** The guarantees that matter in M5 are transactional: a log and its outbox row commit
+together or not at all; a repeat upsert must not duplicate; a rollback must leave no half-state.
+`expo-sqlite` is a native module and does not run under Jest on Windows, and the existing
+migration test could only assert on pure functions, never on the SQL itself.
+
+**Alternatives considered.** (a) A hand-written in-memory fake implementing the database
+interface. (b) `better-sqlite3` as a dev dependency. (c) Node 24's built-in `node:sqlite`.
+
+**Reason.** (c). A fake would have to model transactions, constraints and rollback — the exact
+behaviours under test — so it could agree with a bug. `better-sqlite3` needs a native build
+toolchain on a Windows host, which contradicts the project's whole development posture.
+`node:sqlite` is built into the Node version already required, so it costs no dependency at all.
+
+**Consequences.** The offline modules are written against a narrow `SqlDatabase` interface that
+`expo-sqlite`'s handle satisfies structurally; production passes the real handle, tests pass a
+`node:sqlite` adapter. The migration runner moved out of `database.ts` into `migrator.ts` so it
+carries no native import. `nodeSqlite.testing.ts` sits outside `__tests__/` so Jest does not
+collect it as a suite, and is never imported by application code — `node:sqlite` does not exist
+in Hermes. The shipped migrations, their constraints and their rollback behaviour are now
+executed on every test run.
