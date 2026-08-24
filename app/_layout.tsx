@@ -65,6 +65,39 @@ export default function RootLayout() {
                         headerShown: false,
                       }}
                     />
+                    {/* Every logging screen is a sheet like the action list above it. */}
+                    <Stack.Screen
+                      name="log/meal"
+                      options={{
+                        presentation: 'formSheet',
+                        sheetAllowedDetents: [0.9],
+                        sheetCornerRadius: 28,
+                        sheetGrabberVisible: true,
+                        headerShown: false,
+                      }}
+                    />
+                    {/* Bowel movement entry. */}
+                    <Stack.Screen
+                      name="log/bowel"
+                      options={{
+                        presentation: 'formSheet',
+                        sheetAllowedDetents: [0.9],
+                        sheetCornerRadius: 28,
+                        sheetGrabberVisible: true,
+                        headerShown: false,
+                      }}
+                    />
+                    {/* Stress, sleep and exercise. */}
+                    <Stack.Screen
+                      name="log/context"
+                      options={{
+                        presentation: 'formSheet',
+                        sheetAllowedDetents: [0.9],
+                        sheetCornerRadius: 28,
+                        sheetGrabberVisible: true,
+                        headerShown: false,
+                      }}
+                    />
                   </Stack>
                 </SyncProvider>
               </AuthProvider>

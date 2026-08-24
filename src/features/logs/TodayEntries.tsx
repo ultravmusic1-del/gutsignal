@@ -1,56 +1,58 @@
 import { View } from 'react-native';
 
 import { Card, Chip, Text } from '@/components/ui';
+import { bowelSummary, urgencyLabel } from '@/domain/logs/bowel';
+import { contextSummary } from '@/domain/logs/context';
 import { mealSummary, mealTagLabel } from '@/domain/logs/meal';
 import { severityLabel, symptomLabel } from '@/domain/logs/symptom';
 import { formatLocalTime } from '@/domain/time/occurrence';
 import { useMealsForDay } from '@/features/logs/useMealLogs';
+import {
+  useBowelLogsForDay,
+  useContextLogsForDay,
+  useWellbeingLogsForDay,
+} from '@/features/logs/useSimpleLogs';
 import { todayLocalDate, useSymptomLogsForDay } from '@/features/logs/useSymptomLogs';
 import { useTheme } from '@/theme';
 
 /**
  * What the user has logged today (spec §33).
  *
- * Meals and symptoms in one list, ordered by when they happened, because that is how the day
- * was actually lived — and because seeing them interleaved is the first hint of the
- * relationships the pattern engine will later examine properly.
+ * Every entry type in one list, ordered by when it happened, because that is how the day was
+ * actually lived — and because seeing meals, symptoms and context interleaved is the first hint
+ * of the relationships the pattern engine will later examine properly.
  *
  * Reads from SQLite, so it is correct with no connection and shows entries the server has never
  * seen. Anything still queued carries a quiet line rather than a warning: a log waiting to sync
  * is working exactly as designed.
  */
 
-type Entry =
-  | {
-      kind: 'meal';
-      id: string;
-      occurredAt: string;
-      occurredTz: string;
-      syncPending: boolean;
-      title: string;
-      detail: string;
-      tags: string[];
-    }
-  | {
-      kind: 'symptom';
-      id: string;
-      occurredAt: string;
-      occurredTz: string;
-      syncPending: boolean;
-      title: string;
-      detail: string;
-      note: string | null;
-    };
+type Entry = {
+  key: string;
+  /** Named in text, never carried by colour alone (CLAUDE.md §36). */
+  kindLabel: string;
+  occurredAt: string;
+  occurredTz: string;
+  syncPending: boolean;
+  title: string;
+  detail: string | null;
+  note: string | null;
+  tags: string[];
+};
 
 export function TodayEntries() {
   const theme = useTheme();
   const localDate = todayLocalDate();
 
-  const symptoms = useSymptomLogsForDay(localDate);
   const meals = useMealsForDay(localDate);
+  const symptoms = useSymptomLogsForDay(localDate);
+  const bowel = useBowelLogsForDay(localDate);
+  const wellbeing = useWellbeingLogsForDay(localDate);
+  const context = useContextLogsForDay(localDate);
 
-  const isPending = symptoms.isPending || meals.isPending;
-  const isError = symptoms.isError || meals.isError;
+  const sources = [meals, symptoms, bowel, wellbeing, context];
+  const isPending = sources.some((source) => source.isPending);
+  const isError = sources.some((source) => source.isError);
 
   if (isPending) {
     return (
@@ -77,24 +79,65 @@ export function TodayEntries() {
 
   const entries: Entry[] = [
     ...(meals.data ?? []).map<Entry>((meal) => ({
-      kind: 'meal',
-      id: meal.id,
+      key: `meal-${meal.id}`,
+      kindLabel: 'Meal',
       occurredAt: meal.occurredAt,
       occurredTz: meal.occurredTz,
       syncPending: meal.syncPending,
       title: meal.title,
       detail: mealSummary(meal),
+      note: meal.note,
       tags: meal.tags.map(mealTagLabel),
     })),
+
     ...(symptoms.data ?? []).map<Entry>((symptom) => ({
-      kind: 'symptom',
-      id: symptom.id,
+      key: `symptom-${symptom.id}`,
+      kindLabel: 'Symptom',
       occurredAt: symptom.occurredAt,
       occurredTz: symptom.occurredTz,
       syncPending: symptom.syncPending,
       title: symptomLabel(symptom.symptomType),
       detail: `${severityLabel(symptom.severity)} · ${symptom.severity}/10`,
       note: symptom.note,
+      tags: [],
+    })),
+
+    ...(bowel.data ?? []).map<Entry>((log) => ({
+      key: `bowel-${log.id}`,
+      kindLabel: 'Bowel movement',
+      occurredAt: log.occurredAt,
+      occurredTz: log.occurredTz,
+      syncPending: log.syncPending,
+      title: bowelSummary(log),
+      detail: `Urgency: ${urgencyLabel(log.urgency)}`,
+      note: log.note,
+      tags: log.incomplete ? ['Felt unfinished'] : [],
+    })),
+
+    ...(wellbeing.data ?? []).map<Entry>((log) => ({
+      key: `wellbeing-${log.id}`,
+      kindLabel: 'Feeling good',
+      occurredAt: log.occurredAt,
+      occurredTz: log.occurredTz,
+      syncPending: log.syncPending,
+      title: 'A good moment',
+      // No metric, and deliberately none: this is an observation that the day was fine, and
+      // it earns its place by being a comparison point, not by being detailed.
+      detail: null,
+      note: log.note,
+      tags: [],
+    })),
+
+    ...(context.data ?? []).map<Entry>((log) => ({
+      key: `context-${log.id}`,
+      kindLabel: 'Context',
+      occurredAt: log.occurredAt,
+      occurredTz: log.occurredTz,
+      syncPending: log.syncPending,
+      title: contextSummary(log),
+      detail: null,
+      note: log.note,
+      tags: [],
     })),
   ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
 
@@ -122,33 +165,32 @@ export function TodayEntries() {
       </Text>
 
       {entries.map((entry) => (
-        <Card key={`${entry.kind}-${entry.id}`} elevation="flat">
+        <Card key={entry.key} elevation="flat">
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md }}>
             <Text variant="caption" color="secondary" style={{ fontVariant: ['tabular-nums'] }}>
               {formatLocalTime(entry.occurredAt, entry.occurredTz)}
             </Text>
 
             <View style={{ flex: 1, gap: 2 }}>
-              {/* The kind is named in text, never carried by colour alone (CLAUDE.md §36). */}
               <Text variant="caption" color="tertiary">
-                {entry.kind === 'meal' ? 'Meal' : 'Symptom'}
+                {entry.kindLabel}
               </Text>
 
               <Text variant="cardTitle">{entry.title}</Text>
 
-              {entry.detail.length > 0 ? (
+              {entry.detail ? (
                 <Text variant="caption" color="secondary">
                   {entry.detail}
                 </Text>
               ) : null}
 
-              {entry.kind === 'symptom' && entry.note ? (
+              {entry.note ? (
                 <Text variant="caption" color="secondary">
                   {entry.note}
                 </Text>
               ) : null}
 
-              {entry.kind === 'meal' && entry.tags.length > 0 ? (
+              {entry.tags.length > 0 ? (
                 <View
                   style={{
                     flexDirection: 'row',
