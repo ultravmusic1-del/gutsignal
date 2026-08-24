@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# native projects (Continuous Native Generation — never commit)
+/ios
+/android
+
+# secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# build / tooling
+*.tsbuildinfo
+coverage/
+.eas-build-local/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.*
+yarn-error.*
+
+# supabase local
+supabase/.branches
+supabase/.temp
