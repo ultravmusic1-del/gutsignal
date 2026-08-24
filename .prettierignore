@@ -1,0 +1,7 @@
+node_modules
+.expo
+dist
+ios
+android
+package-lock.json
+docs/MASTER_BUILD_SPEC.md
