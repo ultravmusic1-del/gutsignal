@@ -12,12 +12,12 @@ import { AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { openDatabase } from '@/services/db/database';
-import { createSupabaseSymptomRemote } from '@/services/logs/symptomRemote';
+import { createMealSyncEntity } from '@/services/logs/mealRemote';
+import { createSymptomSyncEntity } from '@/services/logs/symptomRemote';
 import { clearCursors } from '@/services/sync/cursors';
 import { createNetworkMonitor } from '@/services/sync/network';
 import { pendingCount } from '@/services/sync/outbox';
 import { createSyncEngine, type SyncEngine } from '@/services/sync/syncEngine';
-import { newId } from '@/utils/id';
 
 export type SyncState = {
   /** Records written on this device that the server has not confirmed. */
@@ -90,9 +90,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
         const engine = createSyncEngine({
           db,
-          remote: createSupabaseSymptomRemote(userId),
+          entities: [createSymptomSyncEntity(userId), createMealSyncEntity(userId)],
           network: createNetworkMonitor(),
-          generateId: newId,
         });
 
         engineRef.current = engine;

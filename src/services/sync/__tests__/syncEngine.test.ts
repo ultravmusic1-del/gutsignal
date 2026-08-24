@@ -17,7 +17,9 @@ import {
 import { readCursor } from '../cursors';
 import type { NetworkMonitor } from '../network';
 import { claimDue, pendingCount } from '../outbox';
-import { createSyncEngine, type SymptomRemote } from '../syncEngine';
+import { applyServerRows } from '@/services/logs/symptomRepository';
+
+import { createSyncEngine, type SyncableRow, type SyncEntity } from '../syncEngine';
 
 const USER = 'user-1';
 const NOW = new Date('2026-08-24T12:00:00Z');
@@ -27,13 +29,14 @@ let counter = 0;
 const generateId = () => `id-${(counter += 1)}`;
 
 /** A server that remembers what it was told, and can be made to misbehave. */
-class FakeRemote implements SymptomRemote {
+class FakeRemote {
   rows = new Map<string, SymptomLogRow>();
   upsertCalls: SymptomLogRow[][] = [];
   failEntireUpsert = 0;
   rejectIds = new Set<string>();
 
-  async upsert(rows: SymptomLogRow[]): Promise<void> {
+  async upsert(payloads: unknown[]): Promise<void> {
+    const rows = payloads as SymptomLogRow[];
     this.upsertCalls.push(rows);
 
     if (this.failEntireUpsert > 0) {
@@ -54,7 +57,7 @@ class FakeRemote implements SymptomRemote {
   }: {
     cursor: string | null;
     limit: number;
-  }): Promise<SymptomLogRow[]> {
+  }): Promise<SyncableRow[]> {
     return [...this.rows.values()]
       .filter((row) => cursor === null || row.updated_at >= cursor)
       .sort((a, b) => a.updated_at.localeCompare(b.updated_at))
@@ -78,12 +81,21 @@ afterEach(() => {
   db.close();
 });
 
+/** Wraps the fake server in the entity shape the engine drives. */
+function symptomEntity(): SyncEntity {
+  return {
+    tableName: 'symptom_logs',
+    upsert: (payloads) => remote.upsert(payloads),
+    fetchChangedSince: (args) => remote.fetchChangedSince(args),
+    apply: (database, rows, pending) => applyServerRows(database, rows as SymptomLogRow[], pending),
+  };
+}
+
 function engine(network: NetworkMonitor = online) {
   return createSyncEngine({
     db,
-    remote,
+    entities: [symptomEntity()],
     network,
-    generateId,
     now: () => NOW,
     random: () => 0.5,
   });
@@ -179,9 +191,8 @@ describe('push', () => {
     const later = new Date(NOW.getTime() + 60_000);
     const recovered = createSyncEngine({
       db,
-      remote,
+      entities: [symptomEntity()],
       network: online,
-      generateId,
       now: () => later,
       random: () => 0.5,
     });

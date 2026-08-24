@@ -11,17 +11,15 @@
  *   pull — fetch everything changed at or after the cursor, merge last-writer-wins, and never
  *          overwrite a local edit that has not been pushed yet
  *
+ * The engine knows nothing about any particular kind of log. It drives a list of `SyncEntity`
+ * implementations, each owning one outbox table name and one cursor, so a new log type is a
+ * new entity rather than a change here.
+ *
  * Rules it exists to enforce: the UI never waits on it, and nothing leaves the outbox until the
  * server has confirmed the write.
  */
 
-import {
-  applyServerRows,
-  SYMPTOM_LOGS_TABLE,
-  type SymptomLogRow,
-} from '@/services/logs/symptomRepository';
 import type { SqlDatabase } from '@/services/db/sqlite';
-import type { IdGenerator } from '@/utils/id';
 
 import { readCursor, writeCursor } from './cursors';
 import type { NetworkMonitor } from './network';
@@ -34,7 +32,7 @@ import {
   type OutboxRow,
 } from './outbox';
 
-/** How many outbox rows one drain pass claims. */
+/** How many outbox rows one drain pass claims, per entity. */
 export const PUSH_BATCH_SIZE = 50;
 
 /** How many server rows one pull page requests. */
@@ -42,6 +40,39 @@ export const PULL_PAGE_SIZE = 200;
 
 /** Bound on pull pages per run, so a pathological cursor cannot loop forever. */
 const MAX_PULL_PAGES = 50;
+
+/**
+ * The minimum every synced row carries: a device-generated id and a server-owned `updated_at`.
+ * The engine needs only these two; everything else is the entity's business.
+ */
+export type SyncableRow = {
+  id: string;
+  updated_at: string;
+};
+
+/**
+ * One synchronisable kind of record.
+ *
+ * `apply` receives rows this same entity produced and validated in `fetchChangedSince`, so
+ * narrowing them back to its own row type inside the implementation is sound.
+ */
+export interface SyncEntity {
+  /** Matches the outbox `table_name` and the cursor key. */
+  readonly tableName: string;
+
+  /** Sends queued payloads to the server. Throws to signal failure — the engine backs off. */
+  upsert(payloads: unknown[]): Promise<void>;
+
+  /** Everything changed at or after the cursor, oldest first. */
+  fetchChangedSince(args: { cursor: string | null; limit: number }): Promise<SyncableRow[]>;
+
+  /** Merges fetched rows into local storage, honouring unpushed local changes. */
+  apply(
+    db: SqlDatabase,
+    rows: SyncableRow[],
+    pending: ReadonlySet<string>
+  ): Promise<{ applied: number; skipped: number }>;
+}
 
 export type SyncResult = {
   pushed: number;
@@ -60,23 +91,16 @@ const IDLE_RESULT: SyncResult = {
   offline: true,
 };
 
-/** The server side of symptom sync. Implemented over Supabase; faked in tests. */
-export interface SymptomRemote {
-  upsert(rows: SymptomLogRow[]): Promise<void>;
-  fetchChangedSince(args: { cursor: string | null; limit: number }): Promise<SymptomLogRow[]>;
-}
-
 export type SyncEngineDeps = {
   db: SqlDatabase;
-  remote: SymptomRemote;
+  entities: SyncEntity[];
   network: NetworkMonitor;
-  generateId: IdGenerator;
   now?: () => Date;
   random?: () => number;
 };
 
 export type SyncEngine = {
-  /** Runs a push then a pull. Safe to call concurrently — calls coalesce. */
+  /** Runs a push then a pull, across every entity. Safe to call concurrently. */
   syncNow(): Promise<SyncResult>;
   /**
    * Recovers stranded work, starts a sync, and watches for reconnection. Returns the stopper.
@@ -87,9 +111,9 @@ export type SyncEngine = {
   start(): Promise<() => void>;
 };
 
-function parsePayload(row: OutboxRow): SymptomLogRow | null {
+function parsePayload(row: OutboxRow): unknown | null {
   try {
-    return JSON.parse(row.payload) as SymptomLogRow;
+    return JSON.parse(row.payload) as unknown;
   } catch {
     return null;
   }
@@ -97,9 +121,8 @@ function parsePayload(row: OutboxRow): SymptomLogRow | null {
 
 export function createSyncEngine({
   db,
-  remote,
+  entities,
   network,
-  generateId,
   now = () => new Date(),
   random = Math.random,
 }: SyncEngineDeps): SyncEngine {
@@ -109,15 +132,15 @@ export function createSyncEngine({
   let queued: Promise<SyncResult> | null = null;
 
   /**
-   * Drains the outbox.
+   * Drains one entity's outbox.
    *
    * The batch is attempted as one request first, because coming back from an outage with fifty
    * queued logs should not cost fifty round trips. If that fails, each row is retried alone, so
    * one row the server rejects cannot hold the rest of the user's history hostage.
    */
-  async function push(): Promise<{ pushed: number; failed: number }> {
+  async function pushEntity(entity: SyncEntity): Promise<{ pushed: number; failed: number }> {
     const claimed = await claimDue(db, {
-      tableName: SYMPTOM_LOGS_TABLE,
+      tableName: entity.tableName,
       limit: PUSH_BATCH_SIZE,
       now: now(),
     });
@@ -131,8 +154,7 @@ export function createSyncEngine({
 
     // A row whose payload will not parse can never succeed. Fail it so it backs off and stays
     // visible, rather than retrying a corrupt body forever at full speed.
-    const corrupt = parsed.filter((entry) => entry.payload === null);
-    for (const entry of corrupt) {
+    for (const entry of parsed.filter((candidate) => candidate.payload === null)) {
       await markFailed(db, entry.row, new Error('Queued payload could not be read.'), {
         now: now(),
         random,
@@ -147,7 +169,7 @@ export function createSyncEngine({
     if (sendable.length === 0) return { pushed, failed };
 
     try {
-      await remote.upsert(sendable.map((entry) => entry.payload));
+      await entity.upsert(sendable.map((entry) => entry.payload));
       for (const entry of sendable) {
         await markSynced(db, entry.row.id);
         pushed += 1;
@@ -159,7 +181,7 @@ export function createSyncEngine({
 
     for (const entry of sendable) {
       try {
-        await remote.upsert([entry.payload]);
+        await entity.upsert([entry.payload]);
         await markSynced(db, entry.row.id);
         pushed += 1;
       } catch (error) {
@@ -171,18 +193,18 @@ export function createSyncEngine({
     return { pushed, failed };
   }
 
-  /** Applies everything the server has that this device has not seen. */
-  async function pull(): Promise<{ pulled: number; skipped: number }> {
+  /** Applies everything the server has for one entity that this device has not seen. */
+  async function pullEntity(entity: SyncEntity): Promise<{ pulled: number; skipped: number }> {
     let pulled = 0;
     let skipped = 0;
-    let cursor = await readCursor(db, SYMPTOM_LOGS_TABLE);
+    let cursor = await readCursor(db, entity.tableName);
 
     for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
-      const rows = await remote.fetchChangedSince({ cursor, limit: PULL_PAGE_SIZE });
+      const rows = await entity.fetchChangedSince({ cursor, limit: PULL_PAGE_SIZE });
       if (rows.length === 0) break;
 
-      const pending = await pendingRecordIds(db, SYMPTOM_LOGS_TABLE);
-      const result = await applyServerRows(db, rows, pending);
+      const pending = await pendingRecordIds(db, entity.tableName);
+      const result = await entity.apply(db, rows, pending);
       pulled += result.applied;
       skipped += result.skipped;
 
@@ -196,7 +218,7 @@ export function createSyncEngine({
       if (newest === '' || newest === cursor) break;
 
       cursor = newest;
-      await writeCursor(db, SYMPTOM_LOGS_TABLE, newest, now());
+      await writeCursor(db, entity.tableName, newest, now());
 
       if (rows.length < PULL_PAGE_SIZE) break;
     }
@@ -209,10 +231,23 @@ export function createSyncEngine({
     // failure that was never the server's fault.
     if (!(await network.isConnected())) return IDLE_RESULT;
 
-    const pushResult = await push();
-    const pullResult = await pull();
+    const result: SyncResult = { pushed: 0, failed: 0, pulled: 0, skipped: 0, offline: false };
 
-    return { ...pushResult, ...pullResult, offline: false };
+    // Push everything before pulling anything: a local write is the more recent intent, and
+    // sending it first keeps the merge from having to arbitrate a conflict we created.
+    for (const entity of entities) {
+      const pushResult = await pushEntity(entity);
+      result.pushed += pushResult.pushed;
+      result.failed += pushResult.failed;
+    }
+
+    for (const entity of entities) {
+      const pullResult = await pullEntity(entity);
+      result.pulled += pullResult.pulled;
+      result.skipped += pullResult.skipped;
+    }
+
+    return result;
   }
 
   /**
@@ -261,5 +296,3 @@ export function createSyncEngine({
 
   return { syncNow, start };
 }
-
-export type { IdGenerator };
