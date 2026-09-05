@@ -440,6 +440,22 @@ describe('buildInsights', () => {
     expect(buildInsights({ logs, range, now: NOW }).readiness.kind).toBe('needs_good_days');
   });
 
+  // Every factor the engine examined reaches the screen through the map, including the ones that
+  // came to nothing — the highlight sections structurally cannot show those.
+  it('carries a gut map covering every factor examined', () => {
+    const insights = buildInsights({ logs: diaryWithAssociation(), range, now: NOW });
+
+    const mapped = insights.gutMap.flatMap((group) => group.entries).map((e) => e.factor.key);
+    const examined = new Set(insights.findings.map((finding) => finding.factor.key));
+
+    expect(new Set(mapped)).toEqual(examined);
+    expect(mapped).toHaveLength(new Set(mapped).size);
+  });
+
+  it('returns an empty gut map for an empty diary rather than empty headings', () => {
+    expect(buildInsights({ logs: emptyLogs, range, now: NOW }).gutMap).toEqual([]);
+  });
+
   it('is deterministic', () => {
     const logs = diaryWithAssociation();
 

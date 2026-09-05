@@ -8,6 +8,7 @@ import { encodeFindingId } from '@/domain/patterns/findingDetail';
 import { readinessCopy } from '@/domain/patterns/insights';
 import { PATTERN_STATUS_COPY, PATTERN_STATUSES } from '@/domain/patterns/status';
 import { FindingCard } from '@/features/insights/FindingCard';
+import { GutMap } from '@/features/insights/GutMap';
 import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
 
@@ -80,7 +81,7 @@ export default function InsightsScreen() {
     );
   }
 
-  const { standsOut, emerging, summary, readiness } = insights.data;
+  const { standsOut, emerging, gutMap, summary, readiness } = insights.data;
   const copy = readinessCopy(readiness);
 
   return (
@@ -128,20 +129,24 @@ export default function InsightsScreen() {
           <EmptyState title={copy.title} body={copy.body} hint={copy.hint} />
         )}
 
-        {/* The scale of the search, so a finding is read against everything else that was
-            examined rather than on its own. Suppressed when there is nothing to show, because the
-            empty state already carries this number in a sentence the user can act on. */}
-        {readiness.kind === 'ready' && summary.comparisons > 0 ? (
-          <Card elevation="flat">
-            <Text variant="caption" color="secondary">
-              GutSignal compared {summary.comparisons}{' '}
-              {summary.comparisons === 1 ? 'combination' : 'combinations'} across {summary.factors}{' '}
-              {summary.factors === 1 ? 'thing' : 'things'} you logged.{' '}
-              {summary.noPattern > 0
-                ? `${summary.noPattern} showed no consistent relationship.`
-                : ''}
-            </Text>
-          </Card>
+        {/* The Gut Map (spec §52) — the landscape rather than the highlights, and the only
+            place a factor that came to nothing is visible at all. It carries the scale of the
+            search in its subtitle, so a finding is read against everything else examined. */}
+        {gutMap.length > 0 ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <View style={{ gap: theme.spacing.xxs }}>
+              <Text variant="overline" color="secondary">
+                YOUR GUT MAP
+              </Text>
+              <Text variant="caption" color="secondary">
+                Everything GutSignal examined: {summary.factors}{' '}
+                {summary.factors === 1 ? 'thing' : 'things'} you logged, across{' '}
+                {summary.comparisons} {summary.comparisons === 1 ? 'comparison' : 'comparisons'}.
+              </Text>
+            </View>
+
+            <GutMap groups={gutMap} onSelect={openFinding} />
+          </View>
         ) : null}
 
         <View style={{ gap: theme.spacing.sm }}>

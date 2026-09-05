@@ -20,6 +20,7 @@ import { DEFAULT_CANDIDATE_LIMITS } from '@/domain/pattern-engine/exposures';
 import type { DateRange, LogSet } from '@/domain/pattern-engine/observations';
 import type { Finding } from '@/domain/pattern-engine/types';
 
+import { buildGutMap, type GutMapGroup } from './gutMap';
 import type { PatternStatus } from './status';
 
 /** How many findings each section shows. Spec §49: avoid presenting twenty at once. */
@@ -213,6 +214,8 @@ export type Insights = {
   findings: Finding[];
   standsOut: Finding[];
   emerging: Finding[];
+  /** Every factor examined, grouped by what can be said about it (spec §52). */
+  gutMap: GutMapGroup[];
   summary: InsightsSummary;
   readiness: InsightsReadiness;
 };
@@ -243,6 +246,7 @@ export function buildInsights({
     findings,
     standsOut: whatStandsOut(findings),
     emerging: worthInvestigating(findings),
+    gutMap: buildGutMap(findings),
     summary: summarise(findings),
     readiness: assessReadiness(logs, findings),
   };
