@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 19** · Update the date and loop number every
+Last updated: **2026-09-06, loop 20** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 47 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 49 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **885 passing**, 52 suites                                       |
+| Tests             | **899 passing**, 53 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -190,19 +190,17 @@ a threshold is not recoverable from the number alone.
 **Blocked:** persisting findings. The migration is written and committed but unapplied because
 the Supabase project is paused — see §7. Do not retry until the owner restores it.
 
-**Pick up here:**
-
 **Milestone 9 is complete** — Insights home, pattern detail, Gut Map and Trends are all built.
 The only outstanding piece is the findings repository, which is blocked on the paused database
 (§7). Experiments (M11), Ask My Gut (M10), subscriptions (M12) and HealthKit (M13) all need
 something the owner must provide first, so the next unblocked milestone is **M16**.
 
-### Next: Milestone 16 — privacy and security hardening
+### Now: Milestone 16 — privacy and security hardening
 
-Most of M16 is an audit needing the live database or credentials that do not exist yet. One part
-is buildable tonight, and it is the part that must exist **before** any screen starts calling it.
+Most of M16 is an audit needing the live database or credentials that do not exist yet. What has
+been buildable is the part that has to exist **before** anything depends on it.
 
-**Done in loop 17:**
+**Done so far (loops 17–20):**
 
 - `services/analytics/events.ts` + `analytics.ts` + 79 tests — **the analytics boundary** (risk
   T5, a §58 release blocker). One `track()`, an allowlist of ~20 events, no free-form property
@@ -219,37 +217,17 @@ is buildable tonight, and it is the part that must exist **before** any screen s
   prefixes vendors actually use rather than the word "key" (a pattern that fires on `apiKey`
   teaches people to add suppressions). **Verified by planting a fake AWS key and watching it
   fail.**
-
-**Pick up here:**
-
-**Also done in loop 18:**
-
-- `features/logs/logAnalytics.ts` + 14 tests — **every log write is now counted.** Saves,
-  corrections and deletions across all five log types, plus both sign-in paths and sign-out.
+- `features/logs/logAnalytics.ts` + 14 tests — **every log write is counted.** Saves, corrections
+  and deletions across all five log types, plus both sign-in paths and sign-out.
   `LOG_COMPLETED_EVENTS` is a `Record<LogEntryKind, …>` and `log_deleted` reads `LOG_ENTRY_KINDS`,
-  so a sixth log type stops compiling rather than going quietly uncounted.
-  Calls live in each mutation's `onSuccess` — react-query guarantees a failed write is never
-  counted, which is why there is no success flag to get wrong. Email sign-in reports on
-  **verification**, not on sending the code, so abandoned attempts do not inflate the funnel.
-  Sign-out sends its event **before** clearing the sink.
+  so a sixth log type stops compiling rather than going quietly uncounted. Calls live in each
+  mutation's `onSuccess` — react-query guarantees a failed write is never counted, which is why
+  there is no success flag to get wrong. Email sign-in reports on **verification**, not on sending
+  the code, so abandoned attempts do not inflate the funnel.
 - `services/analytics/__tests__/callSites.test.ts` — forbids `track` anywhere in `src/domain`
   (that code holds severities and meal items in local variables, and must stay pure to be
   reproducible), and asserts no second analytics dependency exists anywhere. **Verified by
   planting a `track()` call in `src/domain` and watching it fail.**
-
-**Still uncalled**, and the smallest next slice: `app_opened`, `onboarding_*`,
-`log_sheet_opened`/`_dismissed`, `timeline_searched`/`_filtered`, `insights_viewed`,
-`pattern_detail_opened`, `pattern_calculation_expanded`, `sync_failed`. These are all
-**screen-level** events rather than mutations, so each needs a decision about where it fires
-(mount? focus? every re-render?) — `useFocusEffect` with a ref guard is usually right, and firing
-on every render is the classic way these become useless. `log_sheet_opened` needs an `entryPoint`
-the sheet does not currently receive; pass it as a route param from the caller rather than
-guessing inside the sheet.
-
-**Pick up here:**
-
-**Also done in loop 19:**
-
 - `services/db/localAccount.ts` + 18 tests against real SQL — **another account's data is cleared
   when someone else signs in.** The local database is a mirror, not a cache: it held every entry
   in plain rows and nothing removed them on a device change. The second user's queries filter by
@@ -263,24 +241,40 @@ guessing inside the sheet.
   from someone else's position and silently skip their older history.
   Wired in `SyncProvider` **before `engine.start()`, never after.** Signing back in as the same
   user is a deliberate no-op.
-
-**⚠️ Read this before touching sign-out.** Clearing a departed account can discard entries the
-server never accepted, which `CLAUDE.md` §15 forbids doing silently — and by then their owner has
-gone and there is nobody to tell. `wipeLocalDataExcept` therefore _returns_ the count rather than
-dropping it, and warns in development. **The fix belongs at sign-out, while that user is still
-present**, and it is the next thing to build:
+- `features/auth/signOutPlan.ts` + 14 tests — **sign-out flushes, counts, and warns**, closing the
+  §15 gap the wipe above would otherwise have opened. The order is the design: flush first, then
+  count, then ask. Warning about entries a final sync is about to deliver would train people to
+  dismiss the warning, and a dismissed warning is worse than none. The copy names the count, offers
+  the real recovery path ("signing back in here"), and states what breaks it ("if someone else
+  signs in on this device first"). **A test forbids the word "safe" and the phrase "nothing will
+  be lost"** — this copy _is_ the §15 compliance, and if it stops naming the number or the risk the
+  app is back in breach with every check still green. An unreadable count is **not** treated as
+  zero: `unknownSignOutPrompt()` says it does not know, because treating a storage failure as
+  "nothing outstanding" is the exact outcome §15 rules out.
+  `SyncProvider` gained `flush()` — a sync you can await, documented as being for this caller only.
+  Everywhere else must keep using `syncNow` and carry on, since not waiting on the network is the
+  whole point of the offline design.
 
 **Pick up here:**
 
-1. **Flush-then-warn at sign-out.** Attempt a final sync; if entries remain unsent, tell the user
-   before completing sign-out rather than after. `pendingSyncCountFor(db, userId)` and
-   `SyncProvider`'s `syncNow` already exist, so this is a confirmation flow, not new plumbing.
-   Note the current copy in `app/(tabs)/you.tsx` says "Your entries stay on this device and in
-   your account" — accurate today, and it will need to change with this.
+1. **The screen-level analytics events, still uncalled:** `app_opened`, `onboarding_*`,
+   `log_sheet_opened`/`_dismissed`, `timeline_searched`/`_filtered`, `insights_viewed`,
+   `pattern_detail_opened`, `pattern_calculation_expanded`, `sync_failed`.
+   These are a different problem from the mutation events already wired: each needs a decision
+   about **when** it fires. `useFocusEffect` with a ref guard is usually right, and firing on every
+   render is the classic way these become useless. `insights_viewed` takes
+   `{ state: 'empty' | 'populated' }`, which `useInsights` already knows. `log_sheet_opened` needs
+   an `entryPoint` the sheet does not currently receive — pass it as a route param from the caller
+   rather than guessing inside the sheet.
 2. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
    M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
    report may contain — behind the same sink shape as analytics, and test it against §30's list.
    The SDK slots in behind it when the owner supplies a DSN.
+3. **Account deletion (spec §97, a §58 blocker).** `deleteLocalDatabase()` already exists in
+   `services/db/database.ts` and nothing calls it; `wipeLocalDataExcept(db, null)` clears
+   everything without touching the file. The **server** cascade needs the paused database, so the
+   local half and the confirmation flow can be built now and the Edge Function added later — but
+   do not ship a delete button whose server half does nothing (§57).
 
 Blocked in M16 until the owner acts: the RLS audit (needs the database restored), the Sentry
 scrubber (needs a DSN), and the dependency audit's follow-up (`npm audit` runs, but any fix
@@ -300,13 +294,14 @@ each status means and what it does not.
 
 ### After that, in order
 
-1. **M9** — Insights, pattern detail, trends. Needs M8.
-2. **M11** — Experiments. Needs M8.
-3. **M15** — Reports and export.
-4. **M16** — Privacy and security hardening.
+1. **M15** — Reports and export. Fully unblocked: `loadLogSet` already reads the whole diary, and
+   `expo-print` (HTML→PDF) is already approved in `docs/PROJECT_PLAN.md`, so it needs no new
+   dependency decision.
+2. **M11** — Experiments. Needs M8, which is done. Also the milestone that unblocks the second
+   half of `nextStep()` on the pattern detail page.
 
 M10 (Ask My Gut) and M7 need an AI provider. M12 needs RevenueCat. M13 needs HealthKit on a
-device. All blocked.
+device. All blocked on the owner. M9 and M16 are the current and previous milestones above.
 
 ---
 
@@ -375,6 +370,7 @@ Append one line per loop. Keep it short and factual.
 | 17   | M16 started: the analytics allowlist (§29/T5) and a secret scan, both built before anything needs them. | 850 tests, verify green, bundle builds |
 | 18   | Every log write, edit, deletion and sign-in now reports. `track` forbidden in `src/domain`, by test.    | 867 tests, verify green, bundle builds |
 | 19   | Another account's local data is cleared when someone else signs in — a §58 cross-user hole, closed.     | 885 tests, verify green, bundle builds |
+| 20   | Sign-out flushes, counts and warns before discarding anything unsent (§15). §4 tidied of loop drift.    | 899 tests, verify green, bundle builds |
 
 ---
 
@@ -457,9 +453,18 @@ unsent entries are gone.
 
 That window is narrow — it needs a sign-out with no connectivity, followed by a different person
 signing in before the first returns — and the alternative was leaving one person's health diary on
-a device belonging to someone else, which §58 does not permit. The proper fix is the first item in
-§4: flush the outbox at sign-out and warn if anything remains, while the person it belongs to is
-still there to be told. Say if you would rather that landed before the wipe did.
+a device belonging to someone else, which §58 does not permit.
+
+**Loop 20 closed it properly:** sign-out now attempts a final sync, counts what is still unsent,
+and names the number before continuing. The loss can no longer be a surprise. What is left for you
+is a judgement about tone rather than correctness — the warning is deliberately unreassuring, and
+a test forbids it from saying "safe" or "nothing will be lost". Read
+`src/features/auth/signOutPlan.ts` and say if that is too blunt for your product voice.
+
+One consequence worth knowing: sign-out now waits on the network before showing its confirmation,
+so on a bad connection the button spins for as long as a sync attempt takes. It is the only place
+in the app that waits on the network at all, and it does so because it is the last moment the
+person whose entries these are is still present.
 
 #### 🟡 The analytics event list is a product decision, and it is now written down
 
