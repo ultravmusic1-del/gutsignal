@@ -9,6 +9,7 @@ import { readinessCopy } from '@/domain/patterns/insights';
 import { PATTERN_STATUS_COPY, PATTERN_STATUSES } from '@/domain/patterns/status';
 import { FindingCard } from '@/features/insights/FindingCard';
 import { GutMap } from '@/features/insights/GutMap';
+import { TrendChart } from '@/features/insights/TrendChart';
 import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
 
@@ -81,7 +82,10 @@ export default function InsightsScreen() {
     );
   }
 
-  const { standsOut, emerging, gutMap, summary, readiness } = insights.data;
+  const { standsOut, emerging, gutMap, trends, summary, readiness } = insights.data;
+
+  // Only the series with enough weeks to be a line rather than a pair of dots.
+  const drawableTrends = trends.filter((series) => series.hasTrend);
   const copy = readinessCopy(readiness);
 
   return (
@@ -128,6 +132,21 @@ export default function InsightsScreen() {
         ) : (
           <EmptyState title={copy.title} body={copy.body} hint={copy.hint} />
         )}
+
+        {/* Trends sit outside the readiness gate on purpose. A three-week diary has a real
+            trend to show long before it has a comparison worth making, and seeing that logging
+            is going somewhere is most valuable exactly when there are no findings yet. */}
+        {drawableTrends.length > 0 ? (
+          <View style={{ gap: theme.spacing.lg }}>
+            <Text variant="overline" color="secondary">
+              TRENDS
+            </Text>
+
+            {drawableTrends.map((series) => (
+              <TrendChart key={series.key} series={series} />
+            ))}
+          </View>
+        ) : null}
 
         {/* The Gut Map (spec §52) — the landscape rather than the highlights, and the only
             place a factor that came to nothing is visible at all. It carries the scale of the

@@ -22,6 +22,7 @@ import type { Finding } from '@/domain/pattern-engine/types';
 
 import { buildGutMap, type GutMapGroup } from './gutMap';
 import type { PatternStatus } from './status';
+import { buildTrends, type TrendSeries } from './trends';
 
 /** How many findings each section shows. Spec §49: avoid presenting twenty at once. */
 export const STANDS_OUT_LIMIT = 4;
@@ -216,6 +217,8 @@ export type Insights = {
   emerging: Finding[];
   /** Every factor examined, grouped by what can be said about it (spec §52). */
   gutMap: GutMapGroup[];
+  /** Weekly series over the same range. Independent of whether any finding exists. */
+  trends: TrendSeries[];
   summary: InsightsSummary;
   readiness: InsightsReadiness;
 };
@@ -247,6 +250,10 @@ export function buildInsights({
     standsOut: whatStandsOut(findings),
     emerging: worthInvestigating(findings),
     gutMap: buildGutMap(findings),
+    // Computed regardless of readiness: a diary with three weeks in it has a real trend to show
+    // long before it has a comparison worth making, and that is exactly when a user most needs
+    // to see that their logging is going somewhere.
+    trends: buildTrends({ logs, range }),
     summary: summarise(findings),
     readiness: assessReadiness(logs, findings),
   };
