@@ -192,3 +192,34 @@ export function formatLocalTime(instant: string, timeZone: string): string {
   const parts = partsInZone(date, zone);
   return `${pad(parts.hour, 2)}:${pad(parts.minute, 2)}`;
 }
+
+/**
+ * How a day reads as a timeline heading.
+ *
+ * Compares calendar dates as strings rather than as instants. Both are already the user's local
+ * dates, so no arithmetic on timestamps is involved — which is the point: nothing here can
+ * reintroduce the timezone bug the local date exists to prevent.
+ */
+export function formatDayHeading(localDate: string, today: string): string {
+  if (localDate === today) return 'Today';
+  if (localDate === previousLocalDate(today)) return 'Yesterday';
+
+  const parsed = new Date(`${localDate}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return localDate;
+
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(parsed);
+}
+
+/** The calendar day before `localDate`, as `YYYY-MM-DD`. */
+export function previousLocalDate(localDate: string): string {
+  const parsed = new Date(`${localDate}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return localDate;
+
+  parsed.setUTCDate(parsed.getUTCDate() - 1);
+  return parsed.toISOString().slice(0, 10);
+}

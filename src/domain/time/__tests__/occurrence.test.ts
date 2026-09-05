@@ -1,4 +1,11 @@
-import { buildOccurrence, formatLocalTime, resolveTimeZone, utcOffsetMinutes } from '../occurrence';
+import {
+  buildOccurrence,
+  formatDayHeading,
+  formatLocalTime,
+  previousLocalDate,
+  resolveTimeZone,
+  utcOffsetMinutes,
+} from '../occurrence';
 
 /**
  * Timezone behaviour is risk R-02 in docs/PROJECT_PLAN.md: the most likely source of silent
@@ -160,5 +167,41 @@ describe('formatLocalTime', () => {
 
   it('falls back to UTC rather than failing to render a stored log', () => {
     expect(formatLocalTime('2026-08-24T08:05:00Z', 'Mars/Olympus')).toBe('08:05');
+  });
+});
+
+describe('formatDayHeading', () => {
+  it('names today and yesterday', () => {
+    expect(formatDayHeading('2026-08-24', '2026-08-24')).toBe('Today');
+    expect(formatDayHeading('2026-08-23', '2026-08-24')).toBe('Yesterday');
+  });
+
+  it('crosses a month boundary correctly', () => {
+    expect(formatDayHeading('2026-07-31', '2026-08-01')).toBe('Yesterday');
+  });
+
+  it('crosses a year boundary correctly', () => {
+    expect(formatDayHeading('2025-12-31', '2026-01-01')).toBe('Yesterday');
+  });
+
+  it('handles a leap day', () => {
+    expect(formatDayHeading('2028-02-29', '2028-03-01')).toBe('Yesterday');
+  });
+
+  it('spells out any other day', () => {
+    expect(formatDayHeading('2026-08-20', '2026-08-24')).toBe('Thu 20 Aug');
+  });
+
+  it('never invents a heading for an unparseable date', () => {
+    expect(formatDayHeading('not-a-date', '2026-08-24')).toBe('not-a-date');
+  });
+});
+
+describe('previousLocalDate', () => {
+  it('steps back one calendar day', () => {
+    expect(previousLocalDate('2026-08-24')).toBe('2026-08-23');
+    expect(previousLocalDate('2026-03-01')).toBe('2026-02-28');
+    expect(previousLocalDate('2028-03-01')).toBe('2028-02-29');
+    expect(previousLocalDate('2026-01-01')).toBe('2025-12-31');
   });
 });
