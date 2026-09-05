@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 16** · Update the date and loop number every
+Last updated: **2026-09-06, loop 17** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 41 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 43 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **759 passing**, 46 suites                                       |
+| Tests             | **850 passing**, 49 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -202,24 +202,41 @@ something the owner must provide first, so the next unblocked milestone is **M16
 Most of M16 is an audit needing the live database or credentials that do not exist yet. One part
 is buildable tonight, and it is the part that must exist **before** any screen starts calling it.
 
-1. **The analytics boundary** — risk T5 in `docs/PROJECT_PLAN.md`, and a release blocker under
-   `CLAUDE.md` §58 ("sensitive health values in analytics").
-   Build a central `track()` wrapper with **an allowlist of event names and no free-form property
-   passthrough**. Not a thin wrapper over a provider — a wall. `CLAUDE.md` §29 is unusually
-   concrete about what it must refuse: symptom type, severity, Bristol type, food names, meal
-   contents, journal text, HealthKit values, Ask My Gut content, suspected factors.
-   **Do this before anything calls it.** There is not a single `track()` call in the codebase
-   right now, which is the ideal moment: once screens are calling a permissive API, tightening it
-   is a migration rather than a decision. The type signature should make a health-carrying event
-   _unrepresentable_, not merely discouraged — a runtime scrubber is the second line of defence,
-   not the first.
-   No PostHog dependency is needed yet, and do not add one: the wrapper is the boundary, and a
-   provider slots in behind it when the owner supplies a key. A no-op sink is the honest default.
-2. **A secret scan test** — assert no key-shaped string appears in tracked source. Cheap, and it
-   guards a §58 blocker permanently rather than at review time.
-3. **Local account-deletion wipe** — the server cascade needs the database, but "sign out clears
-   every local table and the outbox" is pure, testable, and where a leak would actually show up
-   on a shared device. Check what `authService` does on sign-out before assuming it is missing.
+**Done in loop 17:**
+
+- `services/analytics/events.ts` + `analytics.ts` + 79 tests — **the analytics boundary** (risk
+  T5, a §58 release blocker). One `track()`, an allowlist of ~20 events, no free-form property
+  passthrough. TypeScript rejects an undeclared event or property at the call site; Zod
+  `.strict()` rejects it again at runtime, because types vanish at the boundary with untyped code.
+  **No property is a `z.string()` or `z.number()`** — enums and booleans only, because a string
+  property is an open channel whatever discipline exists today. Per §29's own example the log kind
+  lives in the **event name**, never a property, and `pattern_detail_opened` carries nothing at
+  all. `events.test.ts` scans the declarations for content-shaped names, so adding `severity`
+  fails the suite rather than review. A sink that throws is swallowed (§54).
+  `ONBOARDING_STEPS` moved to `domain/onboarding/steps.ts` so the funnel vocabulary is derived
+  from the flow rather than restated; `OnboardingStep.tsx` re-exports it.
+- `src/__tests__/secrets.test.ts` + 12 tests — a secret scan over tracked files, anchored on the
+  prefixes vendors actually use rather than the word "key" (a pattern that fires on `apiKey`
+  teaches people to add suppressions). **Verified by planting a fake AWS key and watching it
+  fail.**
+
+**Pick up here:**
+
+1. **Call `track()` from the flows that already exist.** The wall is built and nothing is behind
+   it. Every declared event maps to a real flow: onboarding steps, sign-in, the log sheet, each
+   log type, timeline search and filter, insights, pattern detail. `insights_viewed` takes
+   `{ state: 'empty' | 'populated' }`, which `useInsights` already knows.
+   Keep the calls at the **edges** — a screen, or a mutation's `onSuccess`. Never inside domain
+   code, which stays pure and testable without a sink. Nothing needs a provider for this to be
+   correct: `track` validates and returns `'no_sink'`.
+2. **Local account-deletion wipe.** The server cascade needs the database, but "signing out clears
+   every local table and the outbox" is pure, testable, and where a leak would actually show up on
+   a shared device. **Read `services/auth/authService.ts` first** — check what sign-out already
+   does before assuming this is missing.
+3. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
+   M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
+   report may contain — behind the same sink shape as analytics, and test it against §30's list.
+   The SDK slots in behind it when the owner supplies a DSN.
 
 Blocked in M16 until the owner acts: the RLS audit (needs the database restored), the Sentry
 scrubber (needs a DSN), and the dependency audit's follow-up (`npm audit` runs, but any fix
@@ -311,6 +328,7 @@ Append one line per loop. Keep it short and factual.
 | 14   | `findingDetail` + **pattern detail screen** (§51), wired from Insights. Route-registration test added.  | 710 tests, verify green, bundle builds |
 | 15   | `gutMap` + **Gut Map section** (§52) — every factor examined, including the ones that came to nothing.  | 734 tests, verify green, bundle builds |
 | 16   | `trends` + `TrendChart` (§49) — bars not lines, gaps left empty. **Milestone 9 complete.**              | 759 tests, verify green, bundle builds |
+| 17   | M16 started: the analytics allowlist (§29/T5) and a secret scan, both built before anything needs them. | 850 tests, verify green, bundle builds |
 
 ---
 
@@ -380,6 +398,28 @@ billing implications, not a migration. The overnight permissions cover applying 
 2. **`npm run format:check` reports `tsconfig.json` as unformatted.** Pre-existing, untouched by
    any loop, and not worth a noisy diff inside a feature commit. `npx prettier --write tsconfig.json`
    clears it whenever you want a clean check.
+
+#### 🟡 The analytics event list is a product decision, and it is now written down
+
+`src/services/analytics/events.ts` declares every event GutSignal may ever send. It is short and
+deliberately conservative, and it is worth two minutes of your time because **it is easier to add
+an event than to remove one that a dashboard already depends on.**
+
+Three calls I made that you might want changed:
+
+- **`pattern_detail_opened` carries no properties.** Sending the pattern's status would tell you
+  which findings people actually open, which is genuinely useful funnel data — but it also says
+  "this user has a moderate signal", which is a statement about their health however abstract it
+  looks. I left it out. If you want it, that is your call to make, not mine.
+- **No counts anywhere.** Not "logs this week", not "findings shown". A raw count is one join away
+  from being identifying, and §29 asks for funnel state rather than volume.
+- **`timeline_searched` records that a search happened, never the query.** A search string is free
+  text a person typed about their own health.
+
+Nothing sends anywhere yet — there is no provider and no key, and `track` validates and discards.
+When you do supply a PostHog key, session replay must stay **off** (`docs/PROJECT_PLAN.md` line
+102), and the copy already shown to users in the You tab commits you to this: "symptom, food and
+journal content is never sent to product analytics."
 
 #### 🟡 A decision worth confirming: what "Next step" offers
 
