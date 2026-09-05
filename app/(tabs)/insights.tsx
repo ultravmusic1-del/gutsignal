@@ -1,36 +1,143 @@
 import { View } from 'react-native';
 
 import { Card, EmptyState, Screen, Text } from '@/components/ui';
+import type { Finding } from '@/domain/pattern-engine/types';
+import { readinessCopy } from '@/domain/patterns/insights';
 import { PATTERN_STATUS_COPY, PATTERN_STATUSES } from '@/domain/patterns/status';
+import { FindingCard } from '@/features/insights/FindingCard';
+import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
 
 /**
- * Insights — patterns, trends, experiments, reviews (spec §49).
+ * A factor can be compared against the same outcome in more than one observation window, so the
+ * window belongs in the identity — without it React sees duplicate keys and reuses the wrong row.
+ */
+function findingKey(finding: Finding): string {
+  return [
+    finding.factor.key,
+    finding.outcome.kind,
+    finding.outcome.symptomType ?? '',
+    finding.window,
+  ].join(':');
+}
+
+/**
+ * Insights — what recurs in the user's own records (spec §49).
  *
- * Milestone 2 delivers the shell and an honest empty state. Findings arrive only once the
- * deterministic engine exists (M8) and there is enough data for it to say something — and
- * the empty state deliberately does not promise that an insight will appear after N days.
+ * Two sections, deliberately few. "What stands out" leads with the substantiated findings;
+ * "Worth investigating" holds early signals apart so they are not mistaken for conclusions.
+ * Spec §49 warns against twenty charts at once, and the engine can generate dozens of results —
+ * showing them all would bury the one that matters.
  *
- * The status explainer is real product content: it sets the expectation, before a user ever
- * sees a finding, that GutSignal reports strength of evidence rather than verdicts.
+ * **The empty state is the common case.** A new user sees it for weeks. It says what the engine
+ * is waiting for rather than "nothing yet", and it never promises a finding will appear: it may
+ * genuinely be that nothing in this diary relates to anything else.
+ *
+ * Gut Map, Trends, Experiments and Weekly review are also §49 sections. They are not here
+ * because they need data or milestones that do not exist yet, and a heading over an empty box
+ * is the placeholder this product does not ship.
  */
 export default function InsightsScreen() {
   const theme = useTheme();
+  const insights = useInsights();
+
+  const header = (
+    <View style={{ gap: theme.spacing.xxs }}>
+      <Text variant="title">Insights</Text>
+      <Text variant="caption" color="secondary">
+        What recurs in your own records — never a diagnosis, and never a cause.
+      </Text>
+    </View>
+  );
+
+  if (insights.isPending) {
+    return (
+      <Screen scroll floatingNav>
+        <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xl }}>
+          {header}
+          <Card>
+            <Text variant="body" color="secondary">
+              Looking through your logs…
+            </Text>
+          </Card>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (insights.isError) {
+    return (
+      <Screen scroll floatingNav>
+        <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xl }}>
+          {header}
+          <EmptyState
+            title="Your insights could not be worked out"
+            body="Nothing has been lost — this is a problem reading from this device, not with your saved entries. Reopening the app usually clears it."
+          />
+        </View>
+      </Screen>
+    );
+  }
+
+  const { standsOut, emerging, summary, readiness } = insights.data;
+  const copy = readinessCopy(readiness);
 
   return (
     <Screen scroll floatingNav>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xl }}>
-        <Text variant="title">Insights</Text>
+        {header}
 
-        <EmptyState
-          title="Not enough information yet"
-          body="GutSignal compares what you log over time. Once there are enough comparable entries, anything that recurs will show up here."
-          hint="Keep logging normally — including the days you feel fine."
-        />
+        {readiness.kind === 'ready' ? (
+          <>
+            {standsOut.length > 0 ? (
+              <View style={{ gap: theme.spacing.sm }}>
+                <Text variant="overline" color="secondary">
+                  WHAT STANDS OUT
+                </Text>
+                {standsOut.map((finding) => (
+                  <FindingCard key={findingKey(finding)} finding={finding} />
+                ))}
+              </View>
+            ) : null}
+
+            {emerging.length > 0 ? (
+              <View style={{ gap: theme.spacing.sm }}>
+                <Text variant="overline" color="secondary">
+                  WORTH INVESTIGATING
+                </Text>
+                <Text variant="caption" color="secondary">
+                  Early differences, based on fewer observations. Worth watching rather than acting
+                  on.
+                </Text>
+                {emerging.map((finding) => (
+                  <FindingCard key={findingKey(finding)} finding={finding} />
+                ))}
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState title={copy.title} body={copy.body} hint={copy.hint} />
+        )}
+
+        {/* The scale of the search, so a finding is read against everything else that was
+            examined rather than on its own. Suppressed when there is nothing to show, because the
+            empty state already carries this number in a sentence the user can act on. */}
+        {readiness.kind === 'ready' && summary.comparisons > 0 ? (
+          <Card elevation="flat">
+            <Text variant="caption" color="secondary">
+              GutSignal compared {summary.comparisons}{' '}
+              {summary.comparisons === 1 ? 'combination' : 'combinations'} across {summary.factors}{' '}
+              {summary.factors === 1 ? 'thing' : 'things'} you logged.{' '}
+              {summary.noPattern > 0
+                ? `${summary.noPattern} showed no consistent relationship.`
+                : ''}
+            </Text>
+          </Card>
+        ) : null}
 
         <View style={{ gap: theme.spacing.sm }}>
           <Text variant="overline" color="secondary">
-            WHAT YOU&apos;LL SEE
+            WHAT THESE MEAN
           </Text>
 
           <Card>
