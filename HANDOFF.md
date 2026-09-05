@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 3** · Update the date and loop number every
+Last updated: **2026-09-06, loop 4** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 14 commits ahead of `main`, pushed                |
+| Current branch    | `feat/m6-timeline` — 16 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **417 passing**, 28 suites                                             |
+| Tests             | **445 passing**, 29 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -85,20 +85,22 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
 - `exposures.ts` + 19 tests — `candidateFactors(days)` returns what is worth scanning, with
   `DEFAULT_CANDIDATE_LIMITS` (4 exposed days, 4 control days, 3 item mentions). Rejects a factor
   present on nearly every day, which has no control group. Deterministic ordering.
+- `comparisons.ts` + 28 tests — `compare()` (counts, rates, severity means, Newcombe/Wilson
+  uncertainty band) and `weeklyConsistency()`. No p-values anywhere (§57).
+  **Read the module doc before using the interval:** it is liberal at the extremes and is NOT a
+  sample-size guard — scoring must gate on counts directly.
 
 **Pick up here, in this order:**
 
-1. `comparisons.ts` — the counts and rates in `ComparisonMetrics`. Pure arithmetic; test divide-by-
-   zero and empty groups hard.
-2. `confidence.ts` + `scoring.ts` — map metrics to one of the five statuses in
+1. `confidence.ts` + `scoring.ts` — map metrics to one of the five statuses in
    `src/domain/patterns/status.ts` (already written — reuse it). Small samples, thin coverage and
    confounding must each visibly reduce confidence and add a line to `limitations`.
-3. `confounders.ts` — co-occurrence overlap between factors (§60).
-4. `multiple-testing.ts` — conservative control for scanning many factors (§61).
-5. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
+2. `confounders.ts` — co-occurrence overlap between factors (§60).
+3. `multiple-testing.ts` — conservative control for scanning many factors (§61).
+4. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
    acceptance criterion. Build them as real synthetic log sets and assert the classification each
    should produce.
-6. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
+5. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
 
 Persisting findings to a `pattern_findings` table (§62) comes after the engine computes them.
 Migrations are permitted; see §2.
@@ -181,6 +183,7 @@ Append one line per loop. Keep it short and factual.
 | 1    | M8 started: pattern-engine `types.ts` (vocabulary) and `windows.ts` + 13 tests.                         | 370 tests, verify green                |
 | 2    | `observations.ts` + 28 tests — the §59 missing-data rules, outcome-specific observability.              | 398 tests, verify green                |
 | 3    | `factors.ts` (thresholded context factors) and `exposures.ts` + 19 tests — candidate selection.         | 417 tests, verify green                |
+| 4    | `comparisons.ts` + 28 tests — counts, rates, severity, Newcombe interval, weekly consistency.           | 445 tests, verify green                |
 
 ---
 
