@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 8** · Update the date and loop number every
+Last updated: **2026-09-06, loop 9** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 24 commits ahead of `main`, pushed                |
+| Current branch    | `feat/m6-timeline` — 26 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **517 passing**, 33 suites                                             |
+| Tests             | **555 passing**, 34 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -108,13 +108,15 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   into `analyse()`**. Shrinks confidence by `breadthPenalty(scanSize)` and re-scores, so a wide
   scan can demote but never promote. `FREE_COMPARISONS` = 10. Deliberately not FDR: that needs
   p-values §57 rules out. The curve is a judgement needing tuning on real diaries.
+- `fixtures/` + 38 tests — **the §42 acceptance criterion, all fifteen scenarios plus the two
+  paired ones (retrospective edit, deletion).** `builders.ts` makes synthetic diaries readable;
+  `scenarios.ts` holds the fixtures, each with a `why` that travels into the test name.
+  They caught a real flaw: `poor_sleep`/`good_sleep` were confounding each other, so
+  `factors.ts` now exposes `measurementOf()` and confounders skip the same measurement.
 
 **Pick up here, in this order:**
 
-1. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
-   acceptance criterion. Build them as real synthetic log sets and assert the classification each
-   should produce.
-2. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
+1. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
 
 Persisting findings to a `pattern_findings` table (§62) comes after the engine computes them.
 Migrations are permitted; see §2.
@@ -202,6 +204,7 @@ Append one line per loop. Keep it short and factual.
 | 6    | `confounders.ts` + 14 tests — imbalance-based entanglement, not similarity.                             | 482 tests, verify green                |
 | 7    | `engine.ts` + 16 tests — `analyse()` joins the whole pass; deterministic end to end.                    | 498 tests, verify green                |
 | 8    | `multiple-testing.ts` + 19 tests — breadth shrinkage, wired into `analyse()`.                           | 517 tests, verify green                |
+| 9    | `fixtures/` + 38 tests — all 15 §42 scenarios. Caught and fixed same-measurement confounding.           | 555 tests, verify green                |
 
 ---
 
