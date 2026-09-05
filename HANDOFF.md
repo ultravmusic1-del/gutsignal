@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-05, loop 0 (session hand-off)** · Update the date and loop number every
+Last updated: **2026-09-05, loop 1** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 7 commits ahead of `main`, pushed                 |
+| Current branch    | `feat/m6-timeline` — 10 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **357 passing**, 25 suites                                             |
+| Tests             | **370 passing**, 26 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -68,7 +68,34 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
 
 ## 4. What to work on
 
-### Now: Milestone 8 — the deterministic pattern engine
+### Now: Milestone 8 — the deterministic pattern engine (in progress)
+
+**Done so far:** `src/domain/pattern-engine/types.ts` (the whole vocabulary — factors, outcomes,
+tracking states, metrics, `Finding`) and `windows.ts` with 13 tests. Windows tile half-open so
+they cannot double-count an outcome, and they are versioned.
+
+**Pick up here, in this order:**
+
+1. `observations.ts` — turn raw logs into `Observation[]`. The heart of it, and where §59 lives:
+   a day with no logs is `no_data`, a day with a `wellbeing_logs` entry is `explicit_good_state`,
+   a day with symptoms is `symptom_logged`. Never infer the second from the absence of the third.
+   Keep unknown-outcome observations rather than dropping them.
+2. `exposures.ts` — derive candidate factors from what is already structured: meal tags, meal item
+   names, context types, meal size. No `factor_catalog` yet.
+3. `comparisons.ts` — the counts and rates in `ComparisonMetrics`. Pure arithmetic; test divide-by-
+   zero and empty groups hard.
+4. `confidence.ts` + `scoring.ts` — map metrics to one of the five statuses in
+   `src/domain/patterns/status.ts` (already written — reuse it). Small samples, thin coverage and
+   confounding must each visibly reduce confidence and add a line to `limitations`.
+5. `confounders.ts` — co-occurrence overlap between factors (§60).
+6. `multiple-testing.ts` — conservative control for scanning many factors (§61).
+7. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
+   acceptance criterion. Build them as real synthetic log sets and assert the classification each
+   should produce.
+8. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
+
+Persisting findings to a `pattern_findings` table (§62) comes after the engine computes them.
+Migrations are permitted; see §2.
 
 This is the product's core intellectual property and the right thing to build unattended: it is
 pure computation, heavily testable, and needs nothing from the owner.
@@ -145,6 +172,7 @@ Append one line per loop. Keep it short and factual.
 | Loop | What changed                                                                                            | Verification                           |
 | ---- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- |
 | 0    | Hand-off written. M6 pushed to `feat/m6-timeline`. Bundle id `com.vivaan.gutsignal` and Apple team set. | 357 tests, doctor 21/21, bundle builds |
+| 1    | M8 started: pattern-engine `types.ts` (vocabulary) and `windows.ts` + 13 tests.                         | 370 tests, verify green                |
 
 ---
 
