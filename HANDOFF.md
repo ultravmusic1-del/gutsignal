@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 13** · Update the date and loop number every
+Last updated: **2026-09-06, loop 14** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 35 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 37 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **662 passing**, 39 suites                                       |
+| Tests             | **710 passing**, 42 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -68,9 +68,10 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
 
 ## 4. What to work on
 
-### Now: Milestone 8 — the deterministic pattern engine (in progress)
+### Milestone 8 — the deterministic pattern engine. **Complete.**
 
-**Done so far:**
+Kept in full below because Milestone 9 reads every one of these modules, and the reasoning behind
+a threshold is not recoverable from the number alone.
 
 - `types.ts` — the whole vocabulary (factors, outcomes, tracking states, metrics, `Finding`).
 - `windows.ts` + 13 tests — half-open so windows cannot double-count an outcome, and versioned.
@@ -145,26 +146,49 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
 - **`app/(tabs)/insights.tsx` — the screen is real.** Loading, error, the two sections, and the
   readiness-explaining empty state. The engine-scale summary line is suppressed when nothing is
   ready, because `readinessCopy` already carries that number in an actionable sentence.
+- `domain/patterns/findingDetail.ts` + 26 tests — every sentence the detail page prints, plus
+  `encodeFindingId`/`findByFindingId`. Findings are recomputed, not stored, so there is no
+  database id: identity is factor + outcome + symptom + window, and that same value is the React
+  list key on Insights. `confidenceWord` reuses `MIN_CONFIDENCE_FOR_MODERATE`/`_STRONG` rather
+  than inventing a second scale — the word and the status cannot contradict each other. The
+  confidence **number is never shown**; it is a conservative composite, not a probability.
+  `exposurePhrases` is day-shaped for every factor because **the engine compares days, not meals**.
+- **`app/pattern/[id].tsx` + 9 tests — pattern detail (spec §51).** Observation, both rates with
+  their denominators, things to consider, confidence with every limitation inline, next step, and
+  "How this was calculated" collapsed behind a real expandable control. No "Start an experiment"
+  button: experiments are M11 and a disabled control is a placeholder (§57). A finding that no
+  longer holds after an edit is simply not found, and the screen says so.
+- `src/__tests__/routeRegistration.test.ts` + 13 tests — **the M6 defect class, finally covered.**
+  Asserts every route file appears as a `<Stack.Screen name>` in the root layout, exactly once,
+  with nothing declared that does not exist. Confirmed to fail when a route is unregistered.
+- `Screen` gained `topInset` — a screen under a native stack header must not apply the top safe
+  area twice.
 
 **Blocked:** persisting findings. The migration is written and committed but unapplied because
 the Supabase project is paused — see §7. Do not retry until the owner restores it.
 
 **Pick up here:**
 
-1. **Pattern detail** (spec §51) — every insight links to its evidence and its calculation. The
-   `Finding` type already carries counts, interval, consistency, confounders, tracking
-   completeness and limitations, so nothing new needs computing; this is a presentation problem.
-   `FindingCard` already takes an `onPress`, so wiring it is a route plus a screen. Show the
-   arithmetic in full, the weeks that agreed and disagreed, and every confounder by name.
+1. **Gut Map** (spec §52) — the four groups (stronger signals · worth investigating · no clear
+   pattern · not enough data), each opening the detail page that now exists. This is the last
+   §49 section that needs no new data and no new milestone: `Insights.findings` already carries
+   every status, `encodeFindingId` already routes, and `PATTERN_STATUS_COPY` already names them.
+   The one hard rule is in the spec: **it must not look like diagnosis output.** A four-column
+   board of factor names with traffic-light colours would read exactly like one, and §36 forbids
+   colour as the only signal anyway.
 2. **Trends** (spec §49) — symptom frequency and severity over time. Needs a chart primitive the
    codebase does not have yet; check `CLAUDE.md` §38 before reaching for a library, and prefer
    `react-native-svg` (already a dependency) over a charting framework.
 3. **A findings repository**, once the database is back — persist each `Finding` with its
    `engineVersion` and `generatedAt` (§18 reproducibility). The migration exists; see §7.
 
-Note on the empty state: it is the case most users see, and it is now the only thing standing
-between a new user and a screen that looks broken. If you change `readinessCopy`, re-read §17 —
-the copy is load-bearing, not decoration.
+Note on the empty state: it is the case most users see, and it is the only thing standing between
+a new user and a screen that looks broken. If you change `readinessCopy`, re-read §17 — the copy
+is load-bearing, not decoration.
+
+Note on `nextStep()`: it deliberately offers only "keep logging" today. When Milestone 11 lands,
+that is the function to change, and the test that forbids the word "experiment" is the one to
+update with it.
 
 Use `PATTERN_STATUS_COPY` from `src/domain/patterns/status.ts` for all status language, and check
 any new copy describing a finding against `CLAUDE.md` §17. `docs/PATTERN_ENGINE.md` explains what
@@ -231,6 +255,7 @@ Append one line per loop. Keep it short and factual.
 | 11   | M9 started: `logSetRepository` + 14 tests. Findings migration written but **unapplied — DB paused**.    | 613 tests, verify green                |
 | 12   | `insights.ts` + 24 tests — section selection, and honest copy for five kinds of silence.                | 637 tests, verify green                |
 | 13   | `buildInsights` + `useInsights` + `FindingCard` + `outcomeLabels`. **Insights screen is real.**         | 662 tests, verify green, bundle builds |
+| 14   | `findingDetail` + **pattern detail screen** (§51), wired from Insights. Route-registration test added.  | 710 tests, verify green, bundle builds |
 
 ---
 
@@ -300,6 +325,17 @@ billing implications, not a migration. The overnight permissions cover applying 
 2. **`npm run format:check` reports `tsconfig.json` as unformatted.** Pre-existing, untouched by
    any loop, and not worth a noisy diff inside a feature commit. `npx prettier --write tsconfig.json`
    clears it whenever you want a clean check.
+
+#### 🟡 A decision worth confirming: what "Next step" offers
+
+Spec §51 offers the user "Keep tracking — **or** — Start an experiment". Experiments are Milestone
+11, so pattern detail currently offers only the first. That is a §57 call, not a product change —
+but if you want the experiment CTA to appear the moment M11 lands rather than being re-litigated
+then, say so and it will be wired as part of that milestone.
+
+The second half of the copy is a judgement worth a look: it tells the user a pattern may **fade**
+with more data, not only firm up. That is honest and it is what the statistics actually say, but
+it is a distinctly un-app-like thing to tell someone, and it is your product voice, not mine.
 
 #### 🟡 Insights has never been looked at
 
