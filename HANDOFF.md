@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 11** · Update the date and loop number every
+Last updated: **2026-09-06, loop 12** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 31 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 33 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **613 passing**, 36 suites                                       |
+| Tests             | **637 passing**, 37 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -127,16 +127,21 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   SQLite in the shape `analyse()` takes, plus `defaultAnalysisRange()` (90 days). Every
   repository gained a `listBetween` range reader. Findings are **recomputed from local logs**,
   never fetched — insights work offline and always match the user's own timeline.
+- `domain/patterns/insights.ts` + 24 tests — `whatStandsOut()`, `worthInvestigating()`,
+  `summarise()`, and **`assessReadiness()` + `readinessCopy()`**, which explain _why_ there is
+  nothing to show. Five kinds of silence, led by "symptoms logged but no good days" — the biggest
+  unlock and the smallest ask. Copy is tested for no blame, no causal language, and no promise
+  that a finding will appear.
 
 **Blocked:** persisting findings. The migration is written and committed but unapplied because
 the Supabase project is paused — see §7. Do not retry until the owner restores it.
 
 **Pick up here:**
 
-1. **A hook to run the engine.** `useInsights()` or similar: `loadLogSet` → `analyse` → cache
-   with TanStack Query, keyed on user and range. Follow `useTimeline` for the query shape. The
-   engine is synchronous and fast, but the read is async, so this belongs in a query not a
-   render.
+1. **A hook to run the engine.** `useInsights()`: `loadLogSet` → `analyse` → cache with TanStack
+   Query, keyed on user and range. Follow `useTimeline` for the query shape. Everything it needs
+   exists; nothing calls `analyse()` from the app yet. Return the findings **and** the readiness
+   from `assessReadiness`, so the screen never has to work out why it is empty.
 2. **The Insights screen** (spec §49). Sections: "What stands out" (the 2–4 highest-value
    findings), "Worth investigating" (emerging), and an honest empty state. **Most users will see
    the empty state for weeks — it deserves as much care as the populated one**, and it should say
@@ -207,6 +212,7 @@ Append one line per loop. Keep it short and factual.
 | 9    | `fixtures/` + 38 tests — all 15 §42 scenarios. Caught and fixed same-measurement confounding.           | 555 tests, verify green                |
 | 10   | `docs/PATTERN_ENGINE.md` + 44 tests pinning it to the code. **Milestone 8 complete.**                   | 599 tests, verify green                |
 | 11   | M9 started: `logSetRepository` + 14 tests. Findings migration written but **unapplied — DB paused**.    | 613 tests, verify green                |
+| 12   | `insights.ts` + 24 tests — section selection, and honest copy for five kinds of silence.                | 637 tests, verify green                |
 
 ---
 
