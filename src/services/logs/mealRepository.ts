@@ -462,6 +462,23 @@ export async function listRecentMeals(
   );
 }
 
+/** Every meal in a local-date range, oldest first. What the pattern engine reads. */
+export async function listMealsBetween(
+  db: SqlDatabase,
+  { userId, start, end }: { userId: string; start: string; end: string }
+): Promise<Meal[]> {
+  const meals = await listMeals(
+    db,
+    `WHERE m.user_id = ? AND m.deleted_at IS NULL
+       AND m.occurred_local_date >= ? AND m.occurred_local_date <= ?
+     ORDER BY m.occurred_at ASC`,
+    [userId, start, end]
+  );
+
+  // The engine has no use for sync state; it analyses what was recorded, not what was sent.
+  return meals.map(({ syncPending: _syncPending, ...meal }) => meal);
+}
+
 /** Loads the meals a timeline page asked for, children included, in three queries. */
 export async function listMealsByIds(db: SqlDatabase, ids: string[]): Promise<MealWithSync[]> {
   if (ids.length === 0) return [];

@@ -128,3 +128,11 @@ export async function listSymptomLogsByIds(
 ): Promise<SymptomLogWithSync[]> {
   return repository.listByIds(db, ids);
 }
+
+/** Every log in a local-date range, oldest first. What the pattern engine reads. */
+export async function listSymptomLogsBetween(
+  db: SqlDatabase,
+  input: { userId: string; start: string; end: string }
+): Promise<SymptomLog[]> {
+  return repository.listBetween(db, input);
+}

@@ -272,6 +272,30 @@ export function createLogRepository<TLog, TRow extends BaseLogRow, TDraft extend
       return list(db, `WHERE l.id IN (${placeholders})`, ids);
     },
 
+    /**
+     * Every log in a local-date range, oldest first.
+     *
+     * What the pattern engine reads. Tombstoned rows are excluded here as well as in the engine
+     * — a deleted log is one the user took back, and it should not travel any further than it
+     * has to.
+     */
+    async listBetween(
+      db: SqlDatabase,
+      { userId, start, end }: { userId: string; start: string; end: string }
+    ): Promise<TLog[]> {
+      const rows = await db.getAllAsync<TRow>(
+        `SELECT * FROM ${tableName}
+          WHERE user_id = ? AND deleted_at IS NULL
+            AND occurred_local_date >= ? AND occurred_local_date <= ?
+          ORDER BY occurred_at ASC`,
+        userId,
+        start,
+        end
+      );
+
+      return rows.map(codec.fromRow);
+    },
+
     /** Most recent logs, newest first. */
     async listRecent(
       db: SqlDatabase,

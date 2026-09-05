@@ -110,3 +110,11 @@ export async function updateWellbeingLog(
 ): Promise<WellbeingLog | null> {
   return repository.update(db, input, deps);
 }
+
+/** Every log in a local-date range, oldest first. What the pattern engine reads. */
+export async function listWellbeingLogsBetween(
+  db: SqlDatabase,
+  input: { userId: string; start: string; end: string }
+): Promise<WellbeingLog[]> {
+  return repository.listBetween(db, input);
+}

@@ -132,3 +132,11 @@ export async function updateBowelLog(
 ): Promise<BowelLog | null> {
   return repository.update(db, input, deps);
 }
+
+/** Every log in a local-date range, oldest first. What the pattern engine reads. */
+export async function listBowelLogsBetween(
+  db: SqlDatabase,
+  input: { userId: string; start: string; end: string }
+): Promise<BowelLog[]> {
+  return repository.listBetween(db, input);
+}

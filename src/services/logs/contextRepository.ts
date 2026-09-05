@@ -122,3 +122,11 @@ export async function updateContextLog(
 ): Promise<ContextLog | null> {
   return repository.update(db, input, deps);
 }
+
+/** Every log in a local-date range, oldest first. What the pattern engine reads. */
+export async function listContextLogsBetween(
+  db: SqlDatabase,
+  input: { userId: string; start: string; end: string }
+): Promise<ContextLog[]> {
+  return repository.listBetween(db, input);
+}
