@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 7** · Update the date and loop number every
+Last updated: **2026-09-06, loop 8** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 22 commits ahead of `main`, pushed                |
+| Current branch    | `feat/m6-timeline` — 24 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **498 passing**, 32 suites                                             |
+| Tests             | **517 passing**, 33 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -104,14 +104,17 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   wired: days → candidates → observations → compare → confounders → confidence → status.
   Deterministic (tests assert identical output and order-independence). Returns negatives too.
   Outcomes derived from what the diary contains via `outcomesFor()`. Inject `now` in tests.
+- `multiple-testing.ts` + 19 tests (16 unit + 3 end-to-end) — breadth control, **already wired
+  into `analyse()`**. Shrinks confidence by `breadthPenalty(scanSize)` and re-scores, so a wide
+  scan can demote but never promote. `FREE_COMPARISONS` = 10. Deliberately not FDR: that needs
+  p-values §57 rules out. The curve is a judgement needing tuning on real diaries.
 
 **Pick up here, in this order:**
 
-1. `multiple-testing.ts` — conservative control for scanning many factors (§61).
-2. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
+1. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
    acceptance criterion. Build them as real synthetic log sets and assert the classification each
    should produce.
-3. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
+2. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
 
 Persisting findings to a `pattern_findings` table (§62) comes after the engine computes them.
 Migrations are permitted; see §2.
@@ -198,6 +201,7 @@ Append one line per loop. Keep it short and factual.
 | 5    | `confidence.ts` + `scoring.ts` + 23 tests — weakest-link confidence, count-gated status.                | 468 tests, verify green                |
 | 6    | `confounders.ts` + 14 tests — imbalance-based entanglement, not similarity.                             | 482 tests, verify green                |
 | 7    | `engine.ts` + 16 tests — `analyse()` joins the whole pass; deterministic end to end.                    | 498 tests, verify green                |
+| 8    | `multiple-testing.ts` + 19 tests — breadth shrinkage, wired into `analyse()`.                           | 517 tests, verify green                |
 
 ---
 
