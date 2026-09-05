@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 10** · Update the date and loop number every
+Last updated: **2026-09-06, loop 11** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -39,14 +39,14 @@ owner and work on something else.
 
 ## 3. Where the work stands right now
 
-|                   |                                                                        |
-| ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 28 commits ahead of `main`, pushed                |
-| `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **599 passing**, 35 suites                                             |
-| `npx expo-doctor` | **21/21**                                                              |
-| iOS bundle        | builds (`npx expo export --platform ios`)                              |
-| Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
+|                   |                                                                  |
+| ----------------- | ---------------------------------------------------------------- |
+| Current branch    | `feat/m6-timeline` — 31 commits ahead of `main`, pushed          |
+| `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
+| Tests             | **613 passing**, 36 suites                                       |
+| `npx expo-doctor` | **21/21**                                                        |
+| iOS bundle        | builds (`npx expo export --platform ios`)                        |
+| Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
 
 **Milestones 0–6 are built.** Onboarding, auth, all five log types writing offline with a durable
 outbox and bidirectional sync, and the timeline with pagination, filters, search, edit and delete.
@@ -119,25 +119,34 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
 
 **Milestone 8 is complete.** Engine, controls, fixtures and documentation all done.
 
-**Next: Milestone 9 — Insights.** M8 is done; nothing in the engine is outstanding except the
-open items recorded in `docs/PATTERN_ENGINE.md` §14, which are deliberate.
+**Milestone 9 — Insights**, in progress.
 
-Read spec §49–§52 first. Suggested order:
+**Done:**
 
-1. **Persist findings** — `pattern_findings` (spec §62, §86). A migration plus RLS plus coverage
-   in `rls_isolation.sql`. Findings currently exist only in memory, so nothing can be compared
-   over time or shown without recomputing. Migrations are permitted; see §2.
-2. **A hook to run the engine** — read logs from SQLite for a range, call `analyse()`, cache with
-   TanStack Query. The engine is pure and takes a `LogSet`; nothing wires it to the database yet.
-3. **The Insights screen** (spec §49) — "What stands out", "Worth investigating", and an honest
-   empty state for a diary with nothing to say yet. Most users will see the empty state for
-   weeks, so it deserves as much care as the populated one.
-4. **Pattern detail** (spec §51) — every insight links to its evidence and its calculation. The
-   `Finding` type already carries everything needed: counts, interval, consistency, confounders,
-   limitations.
+- `logSetRepository.ts` + 14 tests — `loadLogSet(db, { userId, range })` reads a diary from local
+  SQLite in the shape `analyse()` takes, plus `defaultAnalysisRange()` (90 days). Every
+  repository gained a `listBetween` range reader. Findings are **recomputed from local logs**,
+  never fetched — insights work offline and always match the user's own timeline.
 
-Use `PATTERN_STATUS_COPY` from `src/domain/patterns/status.ts` for all status language. Never
-write new copy describing a finding without checking it against `CLAUDE.md` §17.
+**Blocked:** persisting findings. The migration is written and committed but unapplied because
+the Supabase project is paused — see §7. Do not retry until the owner restores it.
+
+**Pick up here:**
+
+1. **A hook to run the engine.** `useInsights()` or similar: `loadLogSet` → `analyse` → cache
+   with TanStack Query, keyed on user and range. Follow `useTimeline` for the query shape. The
+   engine is synchronous and fast, but the read is async, so this belongs in a query not a
+   render.
+2. **The Insights screen** (spec §49). Sections: "What stands out" (the 2–4 highest-value
+   findings), "Worth investigating" (emerging), and an honest empty state. **Most users will see
+   the empty state for weeks — it deserves as much care as the populated one**, and it should say
+   what the engine is waiting for rather than just "nothing yet".
+3. **Pattern detail** (spec §51) — every insight links to its evidence and its calculation. The
+   `Finding` type already carries counts, interval, consistency, confounders and limitations.
+
+Use `PATTERN_STATUS_COPY` from `src/domain/patterns/status.ts` for all status language, and check
+any new copy describing a finding against `CLAUDE.md` §17. `docs/PATTERN_ENGINE.md` explains what
+each status means and what it does not.
 
 ### After that, in order
 
@@ -197,6 +206,7 @@ Append one line per loop. Keep it short and factual.
 | 8    | `multiple-testing.ts` + 19 tests — breadth shrinkage, wired into `analyse()`.                           | 517 tests, verify green                |
 | 9    | `fixtures/` + 38 tests — all 15 §42 scenarios. Caught and fixed same-measurement confounding.           | 555 tests, verify green                |
 | 10   | `docs/PATTERN_ENGINE.md` + 44 tests pinning it to the code. **Milestone 8 complete.**                   | 599 tests, verify green                |
+| 11   | M9 started: `logSetRepository` + 14 tests. Findings migration written but **unapplied — DB paused**.    | 613 tests, verify green                |
 
 ---
 
