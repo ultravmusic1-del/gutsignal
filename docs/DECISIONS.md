@@ -873,3 +873,85 @@ that.
 
 Verified against ten thousand entries: a page twenty-five deep costs about the same as the
 first, and a full-text search across all of them returns in a fraction of a second.
+
+---
+
+## ADR-0038 — SDK 57 patch drift is closed by moving react-native and jest-expo together
+
+**Status:** Accepted · **Date:** 2026-09-05
+
+**Context.** `npx expo-doctor` reported 20/21 with thirteen packages behind their SDK 57 patch
+versions. `npx expo install --fix` could not complete: it failed with an npm `ERESOLVE` error,
+and so did a `node_modules` wipe followed by `npm install`.
+
+The cause is a three-way constraint that only appears once react-native moves:
+
+- SDK 57 has moved its pin from `react-native@0.86.2` to `0.86.3`. This is the SDK's own
+  recommendation, read from `https://api.expo.dev/v2/sdks/57.0.0/native-modules`, not a
+  newer-than-SDK version of the kind ADR-0023 warns about.
+- `react-native@0.86.3` declares `peerOptional @react-native/jest-preset@"0.86.3"` — an exact
+  pin. `0.86.2` declared it as a hard peer on `0.86.2`.
+- `jest-expo@57.0.4` peers on `@react-native/jest-preset@"^0.86.2"`; only `jest-expo@57.0.5`
+  peers on `^0.86.3`. SDK 57 asks for `~57.0.5`.
+
+`@react-native/jest-preset` is not a direct dependency. It is an auto-installed peer, and the
+committed lockfile pinned it at `0.86.2`. npm anchors on that entry and refuses to raise it
+unless forced to re-resolve, which is why removing `node_modules` changed nothing: the lockfile,
+not the installed tree, was holding the old version.
+
+`expo install --fix` fails for a second, independent reason. It installs in batches, upgrading
+the production dependencies before the dev dependencies, so it moves react-native to `0.86.3`
+while `jest-expo` is still `57.0.4` — a state npm cannot resolve. It leaves package.json
+half-written when it aborts.
+
+**Alternatives considered.** (a) Hold react-native at `0.86.2` via `expo.install.exclude`.
+(b) Delete `package-lock.json` and let npm re-resolve everything. (c) Move all thirteen packages
+in one atomic `npm install`, after clearing the one stale lockfile entry that anchors the tree.
+
+**Reason.** (c).
+
+(a) inverts the situation ADR-0023 describes. The exclusion would hold the project _below_ the
+SDK's own pin, which is the divergence that breaks EAS, and it would leave the doctor check
+failing permanently rather than fixing it. An exclusion is for holding a package the SDK does not
+own; it is not a way to refuse an SDK patch bump.
+
+(b) works, but re-resolves the whole tree: 107 entries changed, 122 added, 89 removed, silently
+carrying `@supabase/supabase-js` from 2.112.3 to 2.115.0, `zod` to 4.5.4, `react-hook-form` to
+7.87.0 and `@typescript-eslint` to 8.69.0. None of that is related to the SDK drift, and a
+lockfile exists precisely to stop unrelated upgrades riding along with an intended one.
+
+**Consequences.** The lockfile change is confined to the Expo and React Native ecosystem: 44
+entries changed, 7 added, 6 removed, and nothing outside it. `expo-doctor` is back to 21/21,
+`npm run verify` is green at 357 tests, and the iOS bundle still builds at 1988 modules.
+
+No `expo.install.exclude` was added. Nothing was forced; `--force` and `--legacy-peer-deps` were
+not used.
+
+**The reproducible procedure**, should this recur on a later patch bump — the failure mode
+returns whenever an SDK patch moves react-native, because the jest-preset peer is pinned exactly:
+
+1. Read the SDK's own version map from `https://api.expo.dev/v2/sdks/57.0.0/native-modules`
+   and write those ranges into `package.json`. Move `react-native` and `jest-expo` in the same
+   edit, never one without the other.
+2. Delete the `node_modules/@react-native/jest-preset` entry from `package-lock.json`. This is
+   the anchor, and it is the only surgery required.
+3. Run a single `npm install`.
+
+Step 2 is the non-obvious part, and it is why the documented `expo install --fix` workflow cannot
+close this particular drift on its own.
+
+**Local Hermes bytecode is blocked on this Windows machine, and that is unrelated to the app.**
+`react-native@0.86.3` pins `hermes-compiler` to exactly `250829098.0.17`. Windows Smart App
+Control is in enforcement mode here and blocks that binary as not-yet-reputable; the `0.86.2`
+binary it replaces runs, and both are unsigned, so this is reputation, not signing. There is no
+Mark-of-the-Web on the file, so `Unblock-File` does not apply.
+
+The consequence is local and narrow. `npx expo export --platform ios` completes through Metro and
+fails only at the bytecode step; `--no-bytecode` exports cleanly, and the Metro dev server never
+generates bytecode. EAS Build is unaffected: it compiles on hosted macOS using the `osx-bin`
+Hermes binary, and Smart App Control is a Windows feature. Per ADR-0004 that is the only iOS
+build path, so no shipping artefact depends on the blocked binary.
+
+Smart App Control is a system security setting and disabling it is irreversible without
+reinstalling Windows, so it is left alone. Use `--no-bytecode` for local export checks; the block
+is expected to lapse on its own as the binary acquires reputation.
