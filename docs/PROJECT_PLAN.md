@@ -844,7 +844,7 @@ milestone calls for now writes offline, queues durably and syncs bidirectionally
 ### 12.8 Milestone 6 — Timeline (2026-08-24)
 
 Verified on Windows: `tsc --noEmit` clean, `eslint` clean, **357 tests passing**, iOS Metro
-bundle builds. `expo-doctor` 20/21 — see the note below, which is not caused by this work.
+bundle builds, `expo-doctor` 21/21.
 
 | Area       | Delivered                                                                                                                               |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -874,14 +874,11 @@ entries can be corrected from the timeline; recording one is still a single tap 
 it, and it still has no rating. Meal editing rebuilds items from the draft rather than diffing
 them, matching how both the local write and the server function already replace contents.
 
-**`expo-doctor` is 20/21, and was 21/21 earlier the same day.** The failing check is
-"packages match versions required by installed Expo SDK": thirteen Expo packages published new
-_patch_ releases within the SDK 57 line during this work. It is upstream drift, reproducible on
-the previous commit, and unrelated to the timeline. `npx expo install --fix` was attempted and
-reverted: it moves `react-native` to 0.86.3, which hits a real peer conflict with
-`jest-expo`'s pinned `@react-native/jest-preset`. Forcing past that is exactly the class of
-change ADR-0023 warns builds fine on Windows and fails on EAS, so it is left for a deliberate
-dependency pass rather than folded into a feature milestone.
+**The `expo-doctor` drift raised here was closed in `82fa9d3`.** Thirteen Expo packages had
+published new patch releases within the SDK 57 line during this milestone. The fix was not
+`npx expo install --fix` alone: SDK 57 moved its pin to `react-native` 0.86.3, which declares
+an exact peer on `@react-native/jest-preset@0.86.3`, and only `jest-expo` 57.0.5 accepts that.
+The two had to move in the same edit. `expo-doctor` is 21/21 again.
 
 Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md`,
 `TEST_PLAN.md`, `AI_ARCHITECTURE.md` (M7), `PATTERN_ENGINE.md` (M8),

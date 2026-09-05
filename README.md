@@ -116,9 +116,8 @@ or the CLI. RLS isolation tests: `supabase/tests/rls_isolation.sql`.
 ## Current state
 
 **Milestones 0–4 complete. Milestones 5 and 6 built** — all five log types write offline and
-sync; the timeline pages, filters, searches, edits and deletes them. 357 tests passing, iOS
-bundle builds. `expo-doctor` 20/21 (upstream Expo patch drift — see PROJECT_PLAN §12.8).
-On-device verification still outstanding for both.
+sync; the timeline pages, filters, searches, edits and deletes them. 357 tests passing, `expo-doctor`
+21/21, iOS bundle builds. On-device verification still outstanding for both.
 
 | #   | Milestone              | State                                                                             |
 | --- | ---------------------- | --------------------------------------------------------------------------------- |
