@@ -358,11 +358,34 @@ describe('exposure sources', () => {
     expect(buildObservations(days, factor, BLOATING)[0]?.exposed).toBe(true);
   });
 
-  it('finds a factor in a context entry', () => {
-    const factor: Factor = { key: 'stress', label: 'Stress', source: 'context' };
+  it('finds a thresholded context factor', () => {
+    // The context factor is 'high stress', not 'stress was logged'. A level of 1 and a level
+    // of 5 are opposite observations.
+    const factor: Factor = { key: 'high_stress', label: 'Higher stress', source: 'context' };
     const days = buildDays({ ...emptySet, context: [context('2026-08-21', 'stress')] }, range);
 
     expect(buildObservations(days, factor, BLOATING)[0]?.exposed).toBe(true);
+  });
+
+  it('does not count a low reading as exposure to the high factor', () => {
+    const factor: Factor = { key: 'high_stress', label: 'Higher stress', source: 'context' };
+    const calm = { ...context('2026-08-21', 'stress'), valueNumeric: 1 };
+    const days = buildDays({ ...emptySet, context: [calm] }, range);
+
+    expect(buildObservations(days, factor, BLOATING)[0]?.exposed).toBe(false);
+  });
+
+  it('leaves the middle of a scale in neither group', () => {
+    // A day rated 3 is not evidence of stress or of calm; forcing it into one would put
+    // ambiguous days on a side they do not belong.
+    const middling = { ...context('2026-08-21', 'stress'), valueNumeric: 3 };
+    const days = buildDays({ ...emptySet, context: [middling] }, range);
+
+    const high: Factor = { key: 'high_stress', label: 'Higher stress', source: 'context' };
+    const low: Factor = { key: 'low_stress', label: 'Lower stress', source: 'context' };
+
+    expect(buildObservations(days, high, BLOATING)[0]?.exposed).toBe(false);
+    expect(buildObservations(days, low, BLOATING)[0]?.exposed).toBe(false);
   });
 
   it('finds a factor in meal size', () => {

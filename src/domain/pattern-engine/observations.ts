@@ -22,6 +22,7 @@ import type { Meal } from '@/domain/logs/meal';
 import type { SymptomLog } from '@/domain/logs/symptom';
 import type { WellbeingLog } from '@/domain/logs/wellbeing';
 
+import { contextFactorDefinition } from './factors';
 import type { Factor, Observation, Outcome, TrackingCompleteness, TrackingState } from './types';
 
 /** Everything logged over the analysed range. */
@@ -182,7 +183,10 @@ function outcomeValueOn(day: DayLogs, outcome: Outcome): number | null {
 }
 
 /** Whether the factor was present on this day, and when it first appeared. */
-function exposureOn(day: DayLogs, factor: Factor): { exposed: boolean; exposedAt: string | null } {
+export function exposureOn(
+  day: DayLogs,
+  factor: Factor
+): { exposed: boolean; exposedAt: string | null } {
   const matches: string[] = [];
 
   switch (factor.source) {
@@ -213,8 +217,15 @@ function exposureOn(day: DayLogs, factor: Factor): { exposed: boolean; exposedAt
     }
 
     case 'context': {
+      // Thresholded, not merely present: a stress level of 1 and a level of 5 are opposite
+      // observations, and counting both as exposure would compare a group against itself.
+      const definition = contextFactorDefinition(factor.key);
+      if (definition === undefined) break;
+
       for (const entry of day.context) {
-        if (entry.contextType === factor.key) matches.push(entry.occurredAt);
+        if (entry.contextType === definition.contextType && definition.matches(entry)) {
+          matches.push(entry.occurredAt);
+        }
       }
       break;
     }
