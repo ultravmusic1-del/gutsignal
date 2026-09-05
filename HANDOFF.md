@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 4** · Update the date and loop number every
+Last updated: **2026-09-06, loop 5** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 16 commits ahead of `main`, pushed                |
+| Current branch    | `feat/m6-timeline` — 18 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **445 passing**, 29 suites                                             |
+| Tests             | **468 passing**, 30 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -89,18 +89,22 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   uncertainty band) and `weeklyConsistency()`. No p-values anywhere (§57).
   **Read the module doc before using the interval:** it is liberal at the extremes and is NOT a
   sample-size guard — scoring must gate on counts directly.
+- `confidence.ts` + `scoring.ts` + 23 tests — confidence is the **minimum** of five components
+  (sample, coverage, consistency, precision, confounding), so the weakest evidence governs and
+  `limitations` falls out of it. `scoreStatus()` returns one of the five `PatternStatus` values,
+  gating sample size **on counts** (`MIN_GROUP_FOR_ANY_CLAIM` = 5, moderate 10, strong 15) and
+  requiring a 15-point difference before saying anything at all.
+  `assessConfidence` takes `maxConfounderOverlap` — currently the caller must pass 0 until
+  `confounders.ts` exists.
 
 **Pick up here, in this order:**
 
-1. `confidence.ts` + `scoring.ts` — map metrics to one of the five statuses in
-   `src/domain/patterns/status.ts` (already written — reuse it). Small samples, thin coverage and
-   confounding must each visibly reduce confidence and add a line to `limitations`.
-2. `confounders.ts` — co-occurrence overlap between factors (§60).
-3. `multiple-testing.ts` — conservative control for scanning many factors (§61).
-4. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
+1. `confounders.ts` — co-occurrence overlap between factors (§60).
+2. `multiple-testing.ts` — conservative control for scanning many factors (§61).
+3. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
    acceptance criterion. Build them as real synthetic log sets and assert the classification each
    should produce.
-5. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
+4. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
 
 Persisting findings to a `pattern_findings` table (§62) comes after the engine computes them.
 Migrations are permitted; see §2.
@@ -184,6 +188,7 @@ Append one line per loop. Keep it short and factual.
 | 2    | `observations.ts` + 28 tests — the §59 missing-data rules, outcome-specific observability.              | 398 tests, verify green                |
 | 3    | `factors.ts` (thresholded context factors) and `exposures.ts` + 19 tests — candidate selection.         | 417 tests, verify green                |
 | 4    | `comparisons.ts` + 28 tests — counts, rates, severity, Newcombe interval, weekly consistency.           | 445 tests, verify green                |
+| 5    | `confidence.ts` + `scoring.ts` + 23 tests — weakest-link confidence, count-gated status.                | 468 tests, verify green                |
 
 ---
 
