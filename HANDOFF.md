@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 14** · Update the date and loop number every
+Last updated: **2026-09-06, loop 15** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 37 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 39 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **710 passing**, 42 suites                                       |
+| Tests             | **734 passing**, 44 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -163,24 +163,38 @@ a threshold is not recoverable from the number alone.
   with nothing declared that does not exist. Confirmed to fail when a route is unregistered.
 - `Screen` gained `topInset` — a screen under a native stack header must not apply the top safe
   area twice.
+- `domain/patterns/gutMap.ts` + 15 tests, and `features/insights/GutMap.tsx` + 7 tests —
+  **the Gut Map (spec §52)**, now a section at the foot of Insights. The engine emits one finding
+  per factor/outcome/window, so this collapses them to one row per factor, filed under the
+  strongest status any of its comparisons reached and linked to the comparison that earned it.
+  `no_clear_pattern` deliberately outranks `insufficient_data`: "we looked and found nothing" is
+  an answer, "we could not look" is the absence of one. Empty groups are dropped **in the domain**,
+  so a heading with nothing under it is unrepresentable. Group descriptions are read from
+  `PATTERN_STATUS_COPY`, never rewritten. `buildInsights` now returns `gutMap`.
+  The old "compared N combinations" line is gone — the map carries that scale in its subtitle.
 
 **Blocked:** persisting findings. The migration is written and committed but unapplied because
 the Supabase project is paused — see §7. Do not retry until the owner restores it.
 
 **Pick up here:**
 
-1. **Gut Map** (spec §52) — the four groups (stronger signals · worth investigating · no clear
-   pattern · not enough data), each opening the detail page that now exists. This is the last
-   §49 section that needs no new data and no new milestone: `Insights.findings` already carries
-   every status, `encodeFindingId` already routes, and `PATTERN_STATUS_COPY` already names them.
-   The one hard rule is in the spec: **it must not look like diagnosis output.** A four-column
-   board of factor names with traffic-light colours would read exactly like one, and §36 forbids
-   colour as the only signal anyway.
-2. **Trends** (spec §49) — symptom frequency and severity over time. Needs a chart primitive the
-   codebase does not have yet; check `CLAUDE.md` §38 before reaching for a library, and prefer
-   `react-native-svg` (already a dependency) over a charting framework.
-3. **A findings repository**, once the database is back — persist each `Finding` with its
+1. **Trends** (spec §49) — symptom frequency and severity over time. This is the last §49 section
+   that is buildable tonight, and the only one needing something the codebase does not have: a
+   chart. **Check `CLAUDE.md` §38 before reaching for a library.** `react-native-svg` is already
+   a dependency (the icon set uses it), and a sparkline plus a bar series is a smaller, more
+   controllable thing to own than a charting framework — it also keeps §36's accessible-chart
+   requirement solvable, which most chart libraries do not.
+   Keep the maths in `domain/patterns/` and pure, as everything else in M9 is. The data is
+   already there: `loadLogSet` returns the whole diary, and `buildDays` in the engine already
+   knows how to bucket it by local date.
+   **The honesty problem is the hard part, not the drawing.** A line through days the user did
+   not log is a fabricated trend, and §59's distinction between "no observation" and "an explicit
+   good day" has to survive into the chart — a gap must look like a gap.
+2. **A findings repository**, once the database is back — persist each `Finding` with its
    `engineVersion` and `generatedAt` (§18 reproducibility). The migration exists; see §7.
+3. **Milestone 9 is otherwise complete.** If Trends is done and the database is still paused, the
+   next unblocked milestone is **M15 (reports and export)** or **M16 (privacy hardening)** — both
+   listed below. M10, M11, M12 and M13 all need something the owner has to provide first.
 
 Note on the empty state: it is the case most users see, and it is the only thing standing between
 a new user and a screen that looks broken. If you change `readinessCopy`, re-read §17 — the copy
@@ -224,6 +238,16 @@ Follow `CLAUDE.md` §50. Concretely, each loop:
 6. **Push the branch.** Never `main`.
 7. **Update this file** — §3, §4, §6 and §7 — so the next loop starts oriented.
 
+### Two things that will cost you time if you do not know them
+
+- **`render` must be awaited, including inside a helper.** This version of
+  `@testing-library/react-native` only publishes `screen` once the render settles, so
+  `const setup = () => { render(<X />); return spy; }` leaves every assertion failing with
+  "`render` function has not been called" — which looks like a broken component, not a broken
+  helper. Write `await render(...)` inside the helper and make the helper async.
+- **Jest's `expect()` takes one argument.** `expect(value, 'message')` is Vitest. Put the
+  explanation in the test name instead; two loops have lost time to this.
+
 ### Never do these
 
 - Never claim something works because the code looks right. Run it (`CLAUDE.md` §45).
@@ -256,6 +280,7 @@ Append one line per loop. Keep it short and factual.
 | 12   | `insights.ts` + 24 tests — section selection, and honest copy for five kinds of silence.                | 637 tests, verify green                |
 | 13   | `buildInsights` + `useInsights` + `FindingCard` + `outcomeLabels`. **Insights screen is real.**         | 662 tests, verify green, bundle builds |
 | 14   | `findingDetail` + **pattern detail screen** (§51), wired from Insights. Route-registration test added.  | 710 tests, verify green, bundle builds |
+| 15   | `gutMap` + **Gut Map section** (§52) — every factor examined, including the ones that came to nothing.  | 734 tests, verify green, bundle builds |
 
 ---
 
@@ -346,3 +371,7 @@ things in particular need eyes rather than assertions:
   safety and tone but not for whether it lands.
 - **A populated screen**, which no test can show you: the fixtures prove the arithmetic, not
   whether four finding cards stacked together read as calm or as alarming.
+- **The Gut Map's length.** It lists every factor the engine examined, and on a well-logged diary
+  that could be thirty rows under four headings. The tests prove it groups correctly; they cannot
+  tell you whether it is still a _map_ at that size or has become a wall. If it is a wall, the
+  fix is a per-group cap with an honest "and N more", not a smaller scan.
