@@ -15,8 +15,9 @@
  * comparison.
  */
 
+import { analyse } from '@/domain/pattern-engine/engine';
 import { DEFAULT_CANDIDATE_LIMITS } from '@/domain/pattern-engine/exposures';
-import type { LogSet } from '@/domain/pattern-engine/observations';
+import type { DateRange, LogSet } from '@/domain/pattern-engine/observations';
 import type { Finding } from '@/domain/pattern-engine/types';
 
 import type { PatternStatus } from './status';
@@ -201,4 +202,48 @@ export function readinessCopy(readiness: InsightsReadiness): ReadinessCopy {
         hint: 'Keep logging. Patterns that are real tend to show up as there is more to compare.',
       };
   }
+}
+
+// --- Putting it together ----------------------------------------------------
+
+/** Everything the Insights screen needs, from one pass over a diary. */
+export type Insights = {
+  range: DateRange;
+  /** Every pair the engine examined, strongest first. */
+  findings: Finding[];
+  standsOut: Finding[];
+  emerging: Finding[];
+  summary: InsightsSummary;
+  readiness: InsightsReadiness;
+};
+
+/**
+ * Runs the engine over a diary and arranges the result for display.
+ *
+ * Pure, so the whole composition is testable without a database or a React tree: the hook that
+ * calls it does nothing but fetch the logs and hand them over.
+ *
+ * The readiness assessment is computed here rather than on the screen, so a screen can never
+ * decide for itself why it is empty — and so "why is there nothing?" has exactly one answer in
+ * the codebase.
+ */
+export function buildInsights({
+  logs,
+  range,
+  now,
+}: {
+  logs: LogSet;
+  range: DateRange;
+  now?: Date;
+}): Insights {
+  const findings = analyse({ logs, range, now });
+
+  return {
+    range,
+    findings,
+    standsOut: whatStandsOut(findings),
+    emerging: worthInvestigating(findings),
+    summary: summarise(findings),
+    readiness: assessReadiness(logs, findings),
+  };
 }

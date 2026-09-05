@@ -3,6 +3,7 @@ import type { Finding } from '@/domain/pattern-engine/types';
 
 import {
   assessReadiness,
+  buildInsights,
   MINIMUM_USEFUL_DAYS,
   readinessCopy,
   STANDS_OUT_LIMIT,
@@ -338,5 +339,112 @@ describe('the status vocabulary is shared, not redefined', () => {
     for (const shown of [...whatStandsOut(findings), ...worthInvestigating(findings)]) {
       expect(PATTERN_STATUSES).toContain(shown.status);
     }
+  });
+});
+
+describe('buildInsights', () => {
+  const dayLog = (localDate: string, hour: number, id: string) => ({
+    id,
+    userId: 'u1',
+    note: null,
+    source: 'manual' as const,
+    occurredAt: `${localDate}T${String(hour).padStart(2, '0')}:00:00.000Z`,
+    occurredLocalDate: localDate,
+    occurredTz: 'UTC',
+    occurredUtcOffsetMinutes: 0,
+    deletedAt: null,
+    createdAt: `${localDate}T00:00:00.000Z`,
+    updatedAt: `${localDate}T00:00:00.000Z`,
+  });
+
+  const spread = Array.from({ length: 56 }, (_, i) =>
+    new Date(Date.parse('2026-01-05T00:00:00Z') + i * 86_400_000).toISOString().slice(0, 10)
+  );
+  const range = { start: spread[0]!, end: spread[spread.length - 1]! };
+  const NOW = new Date('2026-03-05T09:00:00.000Z');
+
+  /** A diary where a tag and a symptom go together on most exposed days. */
+  function diaryWithAssociation(): LogSet {
+    const exposed = spread.filter((_, i) => i % 2 === 0);
+    const control = spread.filter((_, i) => i % 2 === 1);
+
+    const split = (group: string[], rate: number) => {
+      const count = Math.round(group.length * rate);
+      return {
+        symptoms: group.slice(0, count).map((d, i) => ({
+          ...dayLog(d, 14, `s-${d}-${i}`),
+          symptomType: 'bloating' as const,
+          severity: 6,
+        })),
+        wellbeing: group.slice(count).map((d, i) => dayLog(d, 20, `w-${d}-${i}`)),
+      };
+    };
+
+    const hot = split(exposed, 0.9);
+    const cold = split(control, 0.1);
+
+    return {
+      ...emptyLogs,
+      meals: exposed.map((d) => ({
+        ...dayLog(d, 8, `m-${d}`),
+        title: 'A meal',
+        mealSize: 'medium' as const,
+        photoAssetId: null,
+        items: [],
+        tags: ['caffeinated' as const],
+      })),
+      symptoms: [...hot.symptoms, ...cold.symptoms],
+      wellbeing: [...hot.wellbeing, ...cold.wellbeing],
+    };
+  }
+
+  it('runs the engine and arranges the result', () => {
+    const insights = buildInsights({ logs: diaryWithAssociation(), range, now: NOW });
+
+    expect(insights.findings.length).toBeGreaterThan(0);
+    expect(insights.readiness).toEqual({ kind: 'ready' });
+    expect(insights.standsOut.length).toBeGreaterThan(0);
+    expect(insights.summary.comparisons).toBeGreaterThan(0);
+    expect(insights.range).toEqual(range);
+  });
+
+  it('keeps the sections disjoint', () => {
+    // Nothing may appear as both a headline and something to watch.
+    const insights = buildInsights({ logs: diaryWithAssociation(), range, now: NOW });
+    const headline = new Set(insights.standsOut.map((f) => `${f.factor.key}:${f.outcome.kind}`));
+
+    for (const emerging of insights.emerging) {
+      expect(headline.has(`${emerging.factor.key}:${emerging.outcome.kind}`)).toBe(false);
+    }
+  });
+
+  it('explains an empty diary rather than returning a bare nothing', () => {
+    const insights = buildInsights({ logs: emptyLogs, range, now: NOW });
+
+    expect(insights.findings).toEqual([]);
+    expect(insights.standsOut).toEqual([]);
+    expect(insights.readiness).toEqual({ kind: 'no_logs' });
+    expect(readinessCopy(insights.readiness).title.length).toBeGreaterThan(0);
+  });
+
+  it('names the missing good days for a diary of symptoms only', () => {
+    const logs: LogSet = {
+      ...emptyLogs,
+      symptoms: spread.slice(0, 10).map((d, i) => ({
+        ...dayLog(d, 14, `s-${i}`),
+        symptomType: 'bloating' as const,
+        severity: 6,
+      })),
+    };
+
+    expect(buildInsights({ logs, range, now: NOW }).readiness.kind).toBe('needs_good_days');
+  });
+
+  it('is deterministic', () => {
+    const logs = diaryWithAssociation();
+
+    expect(buildInsights({ logs, range, now: NOW })).toEqual(
+      buildInsights({ logs, range, now: NOW })
+    );
   });
 });
