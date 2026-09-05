@@ -2,19 +2,13 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { Button, Screen, Text } from '@/components/ui';
+import { ONBOARDING_STEPS, type OnboardingStepName } from '@/domain/onboarding/steps';
 import { useTheme } from '@/theme';
 
-/** Ordered steps that show progress. Account and completion sit outside the counter. */
-export const ONBOARDING_STEPS = [
-  'goals',
-  'symptoms',
-  'bowel-pattern',
-  'suspected-factors',
-  'tracking-style',
-  'philosophy',
-] as const;
-
-export type OnboardingStepName = (typeof ONBOARDING_STEPS)[number];
+// Re-exported so existing imports keep working; the list itself lives in `domain` because the
+// analytics allowlist needs it too and must not import a component to get it.
+export { ONBOARDING_STEPS };
+export type { OnboardingStepName };
 
 export type OnboardingStepProps = {
   step: OnboardingStepName;
