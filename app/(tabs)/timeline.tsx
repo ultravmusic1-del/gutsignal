@@ -1,62 +1,189 @@
-import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
+import { ActivityIndicator, ScrollView, SectionList, View } from 'react-native';
 
-import { Chip, EmptyState, Screen, Text } from '@/components/ui';
+import { Chip, EmptyState, Screen, Text, TextField } from '@/components/ui';
+import {
+  TIMELINE_FILTERS,
+  editRouteFor,
+  groupByLocalDate,
+  type LogEntry,
+} from '@/domain/logs/entry';
+import { formatDayHeading } from '@/domain/time/occurrence';
+import { todayLocalDate } from '@/features/logs/useSymptomLogs';
+import { TimelineEntryRow } from '@/features/timeline/TimelineEntryRow';
+import { useDeleteEntry, useTimeline, useTimelineCount } from '@/features/timeline/useTimeline';
+import { useTimelineFilters } from '@/state/timelineFilters';
 import { useTheme } from '@/theme';
-
-/** Timeline filters (spec §48). Kept here until the timeline query lands in Milestone 6. */
-const FILTERS = ['All', 'Meals', 'Symptoms', 'Bowel', 'Wellbeing', 'Context', 'Journal'] as const;
-
-type Filter = (typeof FILTERS)[number];
 
 /**
  * Timeline — the chronological gut diary (spec §48).
  *
- * Milestone 2 delivers the shell: header, working filter row, and the designed empty state.
- * The virtualized, paginated list over local SQLite arrives in Milestone 6, once there are
- * logs to show.
+ * Virtualized with `SectionList`, paged from local storage by keyset cursor, and grouped by the
+ * local calendar day each entry was filed under. Everything renders from SQLite, so a year of
+ * history scrolls identically with no connection.
+ *
+ * The filter and search live in a store rather than in this screen, so browsing state survives
+ * opening an entry and coming back — which is what filtering is usually *for*.
  */
 export default function TimelineScreen() {
   const theme = useTheme();
-  const [filter, setFilter] = useState<Filter>('All');
+  const router = useRouter();
+
+  const { filter, search, setFilter, setSearch } = useTimelineFilters();
+  const selected = TIMELINE_FILTERS.find((option) => option.key === filter) ?? TIMELINE_FILTERS[0];
+
+  const timeline = useTimeline({ kind: selected.kind, search });
+  const totalEntries = useTimelineCount();
+  const deleteEntry = useDeleteEntry();
+
+  const today = todayLocalDate();
+
+  const sections = useMemo(() => {
+    const entries = (timeline.data ?? []).flatMap((page) => page.entries);
+    return groupByLocalDate(entries).map((day) => ({
+      title: formatDayHeading(day.localDate, today),
+      localDate: day.localDate,
+      data: day.entries,
+    }));
+  }, [timeline.data, today]);
+
+  const onEdit = useCallback(
+    (entry: LogEntry) => router.push(editRouteFor(entry) as '/log/symptom'),
+    [router]
+  );
+
+  const onDelete = useCallback(
+    (entry: LogEntry) => deleteEntry.mutate({ kind: entry.kind, id: entry.id }),
+    [deleteEntry]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: LogEntry }) => (
+      <View style={{ paddingHorizontal: theme.spacing.gutter, paddingBottom: theme.spacing.xs }}>
+        <TimelineEntryRow entry={item} onEdit={onEdit} onDelete={onDelete} />
+      </View>
+    ),
+    [onEdit, onDelete, theme.spacing.gutter, theme.spacing.xs]
+  );
+
+  const isFiltering = selected.kind !== null || search.trim() !== '';
+  const hasAnyEntries = (totalEntries.data ?? 0) > 0;
+
+  const header = (
+    <View style={{ gap: theme.spacing.lg, paddingTop: theme.spacing.xl }}>
+      <View style={{ paddingHorizontal: theme.spacing.gutter }}>
+        <Text variant="title">Timeline</Text>
+      </View>
+
+      <View style={{ paddingHorizontal: theme.spacing.gutter }}>
+        <TextField
+          label="Search"
+          hint="Meals, items and anything you noted"
+          value={search}
+          onChangeText={setSearch}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          gap: theme.spacing.xs,
+          paddingHorizontal: theme.spacing.gutter,
+        }}
+      >
+        {TIMELINE_FILTERS.map((option) => (
+          <Chip
+            key={option.key}
+            label={option.label}
+            selected={filter === option.key}
+            onPress={() => setFilter(option.key)}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  const emptyState = timeline.isPending ? (
+    <View style={{ paddingHorizontal: theme.spacing.gutter, paddingTop: theme.spacing.xl }}>
+      <Text variant="body" color="secondary">
+        Loading your diary…
+      </Text>
+    </View>
+  ) : timeline.isError ? (
+    <View style={{ paddingHorizontal: theme.spacing.gutter, paddingTop: theme.spacing.xl }}>
+      <EmptyState
+        title="Your diary could not be read"
+        body="Nothing has been lost — this is a problem reading from this device, not with your saved entries. Reopening the app usually clears it."
+      />
+    </View>
+  ) : (
+    <View style={{ paddingHorizontal: theme.spacing.gutter, paddingTop: theme.spacing.xl }}>
+      {/* Two different situations that need completely different words. */}
+      {isFiltering && hasAnyEntries ? (
+        <EmptyState
+          title="Nothing matches"
+          body="No entries match this filter and search. Clearing them brings your whole diary back."
+        />
+      ) : (
+        <EmptyState
+          title="Nothing logged yet"
+          body="Your entries will appear here in the order they happened, grouped by day."
+          hint="Use the + button to add your first one."
+        />
+      )}
+    </View>
+  );
 
   return (
-    <Screen scroll floatingNav bleed>
-      <View style={{ gap: theme.spacing.lg, paddingTop: theme.spacing.xl }}>
-        <View style={{ paddingHorizontal: theme.spacing.gutter }}>
-          <Text variant="title">Timeline</Text>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            gap: theme.spacing.xs,
-            paddingHorizontal: theme.spacing.gutter,
-          }}
-        >
-          {FILTERS.map((item) => (
-            <Chip
-              key={item}
-              label={item}
-              selected={filter === item}
-              onPress={() => setFilter(item)}
-            />
-          ))}
-        </ScrollView>
-
-        <View style={{ paddingHorizontal: theme.spacing.gutter }}>
-          <EmptyState
-            title="Nothing logged yet"
-            body="Your entries will appear here in the order they happened, grouped by day."
-            hint={
-              filter === 'All'
-                ? undefined
-                : `The ${filter} filter is active — clear it to see every entry.`
-            }
-          />
-        </View>
-      </View>
+    <Screen floatingNav bleed>
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => `${item.kind}:${item.id}`}
+        renderItem={renderItem}
+        ListHeaderComponent={header}
+        ListEmptyComponent={emptyState}
+        stickySectionHeadersEnabled
+        renderSectionHeader={({ section }) => (
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.gutter,
+              paddingTop: theme.spacing.lg,
+              paddingBottom: theme.spacing.sm,
+              backgroundColor: theme.colors.surface.primary,
+            }}
+          >
+            <Text variant="overline" color="secondary">
+              {section.title.toUpperCase()}
+            </Text>
+          </View>
+        )}
+        // Pages are fetched as the user approaches the end rather than all at once, which is
+        // what keeps a multi-year diary from ever being loaded into memory (CLAUDE.md §37).
+        onEndReachedThreshold={0.6}
+        onEndReached={() => {
+          if (timeline.hasNextPage && !timeline.isFetchingNextPage) void timeline.fetchNextPage();
+        }}
+        ListFooterComponent={
+          timeline.isFetchingNextPage ? (
+            <View style={{ paddingVertical: theme.spacing.lg }}>
+              <ActivityIndicator accessibilityLabel="Loading more entries" />
+            </View>
+          ) : (
+            <View style={{ height: theme.spacing.xxl }} />
+          )
+        }
+        // Modest windowing: entries are short and uniform, so a small buffer keeps memory flat
+        // without the blank cells an aggressive setting causes while scrolling fast.
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={9}
+        removeClippedSubviews
+      />
     </Screen>
   );
 }
