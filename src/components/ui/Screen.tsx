@@ -15,6 +15,11 @@ export type ScreenProps = {
   bleed?: boolean;
   /** Adds clearance so content can scroll clear of the floating navigation. */
   floatingNav?: boolean;
+  /**
+   * Whether to pad for the status bar. Set false under a native stack header, which already
+   * insets its content — otherwise the top safe area is applied twice.
+   */
+  topInset?: boolean;
   contentStyle?: ViewStyle;
 };
 
@@ -28,6 +33,7 @@ export function Screen({
   inverse = false,
   bleed = false,
   floatingNav = false,
+  topInset = true,
   contentStyle,
 }: ScreenProps) {
   const theme = useTheme();
@@ -36,7 +42,7 @@ export function Screen({
   const background = inverse ? theme.colors.surface.inverse : theme.colors.surface.primary;
 
   const content: ViewStyle = {
-    paddingTop: insets.top,
+    paddingTop: topInset ? insets.top : 0,
     paddingBottom: insets.bottom + (floatingNav ? FLOATING_NAV_CLEARANCE : 0),
     paddingHorizontal: bleed ? 0 : theme.spacing.gutter,
   };

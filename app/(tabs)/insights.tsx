@@ -1,25 +1,15 @@
+import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
 import { View } from 'react-native';
 
 import { Card, EmptyState, Screen, Text } from '@/components/ui';
 import type { Finding } from '@/domain/pattern-engine/types';
+import { encodeFindingId } from '@/domain/patterns/findingDetail';
 import { readinessCopy } from '@/domain/patterns/insights';
 import { PATTERN_STATUS_COPY, PATTERN_STATUSES } from '@/domain/patterns/status';
 import { FindingCard } from '@/features/insights/FindingCard';
 import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
-
-/**
- * A factor can be compared against the same outcome in more than one observation window, so the
- * window belongs in the identity — without it React sees duplicate keys and reuses the wrong row.
- */
-function findingKey(finding: Finding): string {
-  return [
-    finding.factor.key,
-    finding.outcome.kind,
-    finding.outcome.symptomType ?? '',
-    finding.window,
-  ].join(':');
-}
 
 /**
  * Insights — what recurs in the user's own records (spec §49).
@@ -39,7 +29,18 @@ function findingKey(finding: Finding): string {
  */
 export default function InsightsScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const insights = useInsights();
+
+  const openFinding = useCallback(
+    (finding: Finding) => {
+      router.push({
+        pathname: '/pattern/[id]',
+        params: { id: encodeFindingId(finding) },
+      });
+    },
+    [router]
+  );
 
   const header = (
     <View style={{ gap: theme.spacing.xxs }}>
@@ -95,7 +96,11 @@ export default function InsightsScreen() {
                   WHAT STANDS OUT
                 </Text>
                 {standsOut.map((finding) => (
-                  <FindingCard key={findingKey(finding)} finding={finding} />
+                  <FindingCard
+                    key={encodeFindingId(finding)}
+                    finding={finding}
+                    onPress={openFinding}
+                  />
                 ))}
               </View>
             ) : null}
@@ -110,7 +115,11 @@ export default function InsightsScreen() {
                   on.
                 </Text>
                 {emerging.map((finding) => (
-                  <FindingCard key={findingKey(finding)} finding={finding} />
+                  <FindingCard
+                    key={encodeFindingId(finding)}
+                    finding={finding}
+                    onPress={openFinding}
+                  />
                 ))}
               </View>
             ) : null}

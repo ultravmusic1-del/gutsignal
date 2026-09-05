@@ -109,6 +109,17 @@ export default function RootLayout() {
                         headerShown: false,
                       }}
                     />
+                    {/* Pattern detail is read, not filled in, so it pushes rather than opening
+                    as a sheet — and it takes the native header for a real back gesture and a
+                    back button VoiceOver already knows how to describe. */}
+                    <Stack.Screen
+                      name="pattern/[id]"
+                      options={{
+                        headerShown: true,
+                        headerTitle: 'Pattern',
+                        headerBackTitle: 'Insights',
+                      }}
+                    />
                   </Stack>
                 </SyncProvider>
               </AuthProvider>
