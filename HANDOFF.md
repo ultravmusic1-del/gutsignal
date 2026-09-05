@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 18** · Update the date and loop number every
+Last updated: **2026-09-06, loop 19** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 45 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 47 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **867 passing**, 51 suites                                       |
+| Tests             | **885 passing**, 52 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -248,10 +248,35 @@ guessing inside the sheet.
 
 **Pick up here:**
 
-1. **Local account-deletion wipe.** The server cascade needs the database, but "signing out clears
-   every local table and the outbox" is pure, testable, and where a leak would actually show up on
-   a shared device. **Read `services/auth/authService.ts` first** — check what sign-out already
-   does before assuming this is missing.
+**Also done in loop 19:**
+
+- `services/db/localAccount.ts` + 18 tests against real SQL — **another account's data is cleared
+  when someone else signs in.** The local database is a mirror, not a cache: it held every entry
+  in plain rows and nothing removed them on a device change. The second user's queries filter by
+  `user_id` so they never _saw_ those rows, but "the UI happens not to show it" is not an access
+  control, and §58 calls known cross-user data access a release blocker.
+  Children are deleted before parents so a meal item cannot outlive its meal regardless of
+  `PRAGMA foreign_keys`; queue entries go first, while the rows they point at still exist to
+  identify them by owner. `sync_cursors` is cleared too — `SyncProvider` already does that on a
+  clean sign-out, but the watermark is per **table**, not per user, so on the paths sign-out never
+  sees (force-quit, session changing underneath the app) the next user's first pull would resume
+  from someone else's position and silently skip their older history.
+  Wired in `SyncProvider` **before `engine.start()`, never after.** Signing back in as the same
+  user is a deliberate no-op.
+
+**⚠️ Read this before touching sign-out.** Clearing a departed account can discard entries the
+server never accepted, which `CLAUDE.md` §15 forbids doing silently — and by then their owner has
+gone and there is nobody to tell. `wipeLocalDataExcept` therefore _returns_ the count rather than
+dropping it, and warns in development. **The fix belongs at sign-out, while that user is still
+present**, and it is the next thing to build:
+
+**Pick up here:**
+
+1. **Flush-then-warn at sign-out.** Attempt a final sync; if entries remain unsent, tell the user
+   before completing sign-out rather than after. `pendingSyncCountFor(db, userId)` and
+   `SyncProvider`'s `syncNow` already exist, so this is a confirmation flow, not new plumbing.
+   Note the current copy in `app/(tabs)/you.tsx` says "Your entries stay on this device and in
+   your account" — accurate today, and it will need to change with this.
 2. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
    M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
    report may contain — behind the same sink shape as analytics, and test it against §30's list.
@@ -349,6 +374,7 @@ Append one line per loop. Keep it short and factual.
 | 16   | `trends` + `TrendChart` (§49) — bars not lines, gaps left empty. **Milestone 9 complete.**              | 759 tests, verify green, bundle builds |
 | 17   | M16 started: the analytics allowlist (§29/T5) and a secret scan, both built before anything needs them. | 850 tests, verify green, bundle builds |
 | 18   | Every log write, edit, deletion and sign-in now reports. `track` forbidden in `src/domain`, by test.    | 867 tests, verify green, bundle builds |
+| 19   | Another account's local data is cleared when someone else signs in — a §58 cross-user hole, closed.     | 885 tests, verify green, bundle builds |
 
 ---
 
@@ -418,6 +444,22 @@ billing implications, not a migration. The overnight permissions cover applying 
 2. **`npm run format:check` reports `tsconfig.json` as unformatted.** Pre-existing, untouched by
    any loop, and not worth a noisy diff inside a feature commit. `npx prettier --write tsconfig.json`
    clears it whenever you want a clean check.
+
+#### 🟡 A shared device now loses the previous account's local entries
+
+Loop 19 closed a real privacy hole: another person's diary no longer sits on the device after they
+stop using it. The trade-off is worth knowing about, because it is a behaviour change you did not
+ask for.
+
+**Before:** signing out left everything on disk. Sign back in on that device and any entry the
+server had not yet accepted would still sync. **Now:** if someone _else_ signs in first, those
+unsent entries are gone.
+
+That window is narrow — it needs a sign-out with no connectivity, followed by a different person
+signing in before the first returns — and the alternative was leaving one person's health diary on
+a device belonging to someone else, which §58 does not permit. The proper fix is the first item in
+§4: flush the outbox at sign-out and warn if anything remains, while the person it belongs to is
+still there to be told. Say if you would rather that landed before the wipe did.
 
 #### 🟡 The analytics event list is a product decision, and it is now written down
 
