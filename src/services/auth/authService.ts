@@ -1,6 +1,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import type { Session } from '@supabase/supabase-js';
 
+import { resetAnalytics, track } from '@/services/analytics/analytics';
 import { getSupabaseClient } from '@/services/supabase/client';
 
 /**
@@ -106,6 +107,8 @@ export async function signInWithApple(): Promise<AuthResult> {
 
     if (error) return fail(classify(error));
 
+    track('signed_in', { method: 'apple' });
+
     if (fullName.length > 0) {
       // Best effort: a missing display name is a cosmetic problem, and onboarding asks anyway.
       await supabase.auth.updateUser({ data: { full_name: fullName } });
@@ -141,13 +144,25 @@ export async function verifyEmailCode(email: string, code: string): Promise<Auth
     type: 'email',
   });
 
-  return error ? fail(classify(error)) : { ok: true };
+  if (error) return fail(classify(error));
+
+  // Here rather than in sendEmailCode: a code that was requested but never entered is not a
+  // sign-in, and counting it would inflate the funnel with abandoned attempts.
+  track('signed_in', { method: 'email' });
+  return { ok: true };
 }
 
 export async function signOut(): Promise<AuthResult> {
   const supabase = getSupabaseClient();
   const { error } = await supabase.auth.signOut();
-  return error ? fail(classify(error)) : { ok: true };
+
+  if (error) return fail(classify(error));
+
+  // Reported before the sink is torn down, so the last event of a session is not silently lost.
+  track('signed_out');
+  resetAnalytics();
+
+  return { ok: true };
 }
 
 export async function getCurrentSession(): Promise<Session | null> {

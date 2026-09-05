@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { BowelDraft, BowelLog } from '@/domain/logs/bowel';
 import type { ContextDraft, ContextLog } from '@/domain/logs/context';
+import type { LogEntryKind } from '@/domain/logs/entry';
 import type { Meal, MealDraft } from '@/domain/logs/meal';
 import type { SymptomDraft, SymptomLog } from '@/domain/logs/symptom';
 import type { WellbeingDraft, WellbeingLog } from '@/domain/logs/wellbeing';
 import { resolveTimeZone } from '@/domain/time/occurrence';
+import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
 import { openDatabase } from '@/services/db/database';
 import { getBowelLog, updateBowelLog } from '@/services/logs/bowelRepository';
@@ -59,7 +61,7 @@ export const useContextLogForEdit = (id?: string) =>
  * these queries all read local storage, where a refetch is cheap.
  */
 function useUpdateMutation<TDraft, TResult>(
-  kind: string,
+  kind: LogEntryKind,
   save: (
     db: Awaited<ReturnType<typeof openDatabase>>,
     id: string,
@@ -79,6 +81,8 @@ function useUpdateMutation<TDraft, TResult>(
     },
 
     onSuccess: async (_result, { id }) => {
+      trackLogSaved(kind, 'edited');
+
       await queryClient.invalidateQueries();
       await queryClient.invalidateQueries({ queryKey: editQueryKey(kind, id) });
       syncNow();

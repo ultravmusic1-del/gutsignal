@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { BowelDraft } from '@/domain/logs/bowel';
 import type { ContextDraft } from '@/domain/logs/context';
+import type { LogEntryKind } from '@/domain/logs/entry';
 import type { WellbeingDraft } from '@/domain/logs/wellbeing';
 import { resolveTimeZone } from '@/domain/time/occurrence';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
 import { openDatabase } from '@/services/db/database';
 import { createBowelLog, listBowelLogsForLocalDate } from '@/services/logs/bowelRepository';
@@ -67,6 +69,7 @@ export function useContextLogsForDay(localDate: string) {
  */
 function useLogMutation<TDraft extends { occurredAt: Date }>(
   kind: string,
+  logKind: LogEntryKind,
   write: (
     db: Awaited<ReturnType<typeof openDatabase>>,
     userId: string,
@@ -88,6 +91,8 @@ function useLogMutation<TDraft extends { occurredAt: Date }>(
     },
 
     onSuccess: async (localDate: string) => {
+      trackLogSaved(logKind, 'created');
+
       if (userId !== null) {
         await queryClient.invalidateQueries({ queryKey: dayLogsQueryKey(kind, userId, localDate) });
       }
@@ -97,13 +102,13 @@ function useLogMutation<TDraft extends { occurredAt: Date }>(
 }
 
 export function useLogBowel() {
-  return useLogMutation<BowelDraft>('bowel-logs', (db, userId, draft, timeZone) =>
+  return useLogMutation<BowelDraft>('bowel-logs', 'bowel', (db, userId, draft, timeZone) =>
     createBowelLog(db, { userId, draft, timeZone }, { now: new Date(), generateId: newId })
   );
 }
 
 export function useLogContext() {
-  return useLogMutation<ContextDraft>('context-logs', (db, userId, draft, timeZone) =>
+  return useLogMutation<ContextDraft>('context-logs', 'context', (db, userId, draft, timeZone) =>
     createContextLog(db, { userId, draft, timeZone }, { now: new Date(), generateId: newId })
   );
 }
@@ -115,7 +120,10 @@ export function useLogContext() {
  * slows it down shrinks it. A control group only the most diligent users produce is a biased one.
  */
 export function useLogWellbeing() {
-  return useLogMutation<WellbeingDraft>('wellbeing-logs', (db, userId, draft, timeZone) =>
-    createWellbeingLog(db, { userId, draft, timeZone }, { now: new Date(), generateId: newId })
+  return useLogMutation<WellbeingDraft>(
+    'wellbeing-logs',
+    'wellbeing',
+    (db, userId, draft, timeZone) =>
+      createWellbeingLog(db, { userId, draft, timeZone }, { now: new Date(), generateId: newId })
   );
 }

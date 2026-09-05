@@ -24,6 +24,7 @@
 
 import { z } from 'zod';
 
+import { LOG_ENTRY_KINDS } from '@/domain/logs/entry';
 import { ONBOARDING_STEPS } from '@/domain/onboarding/steps';
 
 /** How the user reached the log sheet. Funnel state, not content. */
@@ -70,9 +71,9 @@ export const ANALYTICS_EVENT_SCHEMAS = {
   bowel_log_completed: logMode,
   wellbeing_log_completed: logMode,
   context_log_completed: logMode,
-  log_deleted: z
-    .object({ kind: z.enum(['meal', 'symptom', 'bowel', 'wellbeing', 'context']) })
-    .strict(),
+  // Derived from the app's own log vocabulary, like the onboarding steps above: a sixth log type
+  // must not be able to arrive here as an unlisted string.
+  log_deleted: z.object({ kind: z.enum(LOG_ENTRY_KINDS) }).strict(),
 
   // --- Timeline ---
   // That a search happened, never what was searched for. A query string is free text a user typed

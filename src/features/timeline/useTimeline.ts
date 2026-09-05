@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import type { LogEntryKind } from '@/domain/logs/entry';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { trackLogDeleted } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
 import { openDatabase } from '@/services/db/database';
 import { softDeleteBowelLog } from '@/services/logs/bowelRepository';
@@ -110,7 +111,9 @@ export function useDeleteEntry() {
       if (!deleted) throw new Error('That entry is no longer here.');
     },
 
-    onSuccess: async () => {
+    onSuccess: async (_result, { kind }) => {
+      trackLogDeleted(kind);
+
       // Everything that shows entries: the timeline itself, its count, and Today.
       await queryClient.invalidateQueries();
       syncNow();

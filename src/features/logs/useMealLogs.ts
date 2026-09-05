@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MealDraft } from '@/domain/logs/meal';
 import { resolveTimeZone } from '@/domain/time/occurrence';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
 import { openDatabase } from '@/services/db/database';
 import {
@@ -97,6 +98,8 @@ export function useLogMeal() {
     },
 
     onSuccess: async (localDate: string) => {
+      trackLogSaved('meal', 'created');
+
       await invalidate(localDate);
       syncNow();
     },
@@ -122,6 +125,8 @@ export function useRepeatMeal() {
     },
 
     onSuccess: async (localDate: string) => {
+      trackLogSaved('meal', 'created');
+
       await invalidate(localDate);
       syncNow();
     },

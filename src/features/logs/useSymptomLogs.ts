@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SymptomDraft } from '@/domain/logs/symptom';
 import { localDateIn, resolveTimeZone } from '@/domain/time/occurrence';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
 import { openDatabase } from '@/services/db/database';
 import {
@@ -80,6 +81,8 @@ export function useLogSymptom() {
     },
 
     onSuccess: async (localDate: string) => {
+      trackLogSaved('symptom', 'created');
+
       if (userId !== null) {
         await queryClient.invalidateQueries({ queryKey: symptomLogsQueryKey(userId, localDate) });
       }
