@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 15** · Update the date and loop number every
+Last updated: **2026-09-06, loop 16** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,14 +41,14 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 39 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 41 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **734 passing**, 44 suites                                       |
+| Tests             | **759 passing**, 46 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
 
-**Milestones 0–6 and 8 are built.** Onboarding, auth, all five log types writing offline with a durable
+**Milestones 0–6, 8 and 9 are built.** Onboarding, auth, all five log types writing offline with a durable
 outbox and bidirectional sync, and the timeline with pagination, filters, search, edit and delete.
 
 ### The single most important caveat
@@ -172,29 +172,58 @@ a threshold is not recoverable from the number alone.
   so a heading with nothing under it is unrepresentable. Group descriptions are read from
   `PATTERN_STATUS_COPY`, never rewritten. `buildInsights` now returns `gutMap`.
   The old "compared N combinations" line is gone — the map carries that scale in its subtitle.
+- `domain/patterns/trends.ts` + 19 tests, and `features/insights/TrendChart.tsx` + 6 tests —
+  **Trends (spec §49)**. Three weekly series: days with symptoms, how strong they felt, days
+  logged. `buildInsights` now returns `trends`; the screen draws only those with `hasTrend`
+  (`MIN_BUCKETS_FOR_TREND` = 3 — two points make a line that reads as a direction while carrying
+  none), and does so **outside the readiness gate**, because a three-week diary has a real trend
+  long before it has a comparison worth making.
+  Four decisions worth not reversing casually:
+  **Bars, not a line** — a line interpolates across a week that was never logged, drawing a health
+  trajectory through days that do not exist. **Symptom frequency divides by days reported on**,
+  not calendar days, or a week off from logging becomes a week of good health. **The axis is
+  fixed** (0–100%, 1–10), never fitted to the data, because auto-scaling turns a 5-point drift
+  into a dramatic climb. **Nothing computes a direction or a change** — comparing two adjacent
+  buckets of a noisy diary is the §21 false-signal machine with none of the engine's confidence
+  machinery to restrain it.
 
 **Blocked:** persisting findings. The migration is written and committed but unapplied because
 the Supabase project is paused — see §7. Do not retry until the owner restores it.
 
 **Pick up here:**
 
-1. **Trends** (spec §49) — symptom frequency and severity over time. This is the last §49 section
-   that is buildable tonight, and the only one needing something the codebase does not have: a
-   chart. **Check `CLAUDE.md` §38 before reaching for a library.** `react-native-svg` is already
-   a dependency (the icon set uses it), and a sparkline plus a bar series is a smaller, more
-   controllable thing to own than a charting framework — it also keeps §36's accessible-chart
-   requirement solvable, which most chart libraries do not.
-   Keep the maths in `domain/patterns/` and pure, as everything else in M9 is. The data is
-   already there: `loadLogSet` returns the whole diary, and `buildDays` in the engine already
-   knows how to bucket it by local date.
-   **The honesty problem is the hard part, not the drawing.** A line through days the user did
-   not log is a fabricated trend, and §59's distinction between "no observation" and "an explicit
-   good day" has to survive into the chart — a gap must look like a gap.
-2. **A findings repository**, once the database is back — persist each `Finding` with its
-   `engineVersion` and `generatedAt` (§18 reproducibility). The migration exists; see §7.
-3. **Milestone 9 is otherwise complete.** If Trends is done and the database is still paused, the
-   next unblocked milestone is **M15 (reports and export)** or **M16 (privacy hardening)** — both
-   listed below. M10, M11, M12 and M13 all need something the owner has to provide first.
+**Milestone 9 is complete** — Insights home, pattern detail, Gut Map and Trends are all built.
+The only outstanding piece is the findings repository, which is blocked on the paused database
+(§7). Experiments (M11), Ask My Gut (M10), subscriptions (M12) and HealthKit (M13) all need
+something the owner must provide first, so the next unblocked milestone is **M16**.
+
+### Next: Milestone 16 — privacy and security hardening
+
+Most of M16 is an audit needing the live database or credentials that do not exist yet. One part
+is buildable tonight, and it is the part that must exist **before** any screen starts calling it.
+
+1. **The analytics boundary** — risk T5 in `docs/PROJECT_PLAN.md`, and a release blocker under
+   `CLAUDE.md` §58 ("sensitive health values in analytics").
+   Build a central `track()` wrapper with **an allowlist of event names and no free-form property
+   passthrough**. Not a thin wrapper over a provider — a wall. `CLAUDE.md` §29 is unusually
+   concrete about what it must refuse: symptom type, severity, Bristol type, food names, meal
+   contents, journal text, HealthKit values, Ask My Gut content, suspected factors.
+   **Do this before anything calls it.** There is not a single `track()` call in the codebase
+   right now, which is the ideal moment: once screens are calling a permissive API, tightening it
+   is a migration rather than a decision. The type signature should make a health-carrying event
+   _unrepresentable_, not merely discouraged — a runtime scrubber is the second line of defence,
+   not the first.
+   No PostHog dependency is needed yet, and do not add one: the wrapper is the boundary, and a
+   provider slots in behind it when the owner supplies a key. A no-op sink is the honest default.
+2. **A secret scan test** — assert no key-shaped string appears in tracked source. Cheap, and it
+   guards a §58 blocker permanently rather than at review time.
+3. **Local account-deletion wipe** — the server cascade needs the database, but "sign out clears
+   every local table and the outbox" is pure, testable, and where a leak would actually show up
+   on a shared device. Check what `authService` does on sign-out before assuming it is missing.
+
+Blocked in M16 until the owner acts: the RLS audit (needs the database restored), the Sentry
+scrubber (needs a DSN), and the dependency audit's follow-up (`npm audit` runs, but any fix
+touching a pinned Expo package needs `npx expo install --check` and a bundle).
 
 Note on the empty state: it is the case most users see, and it is the only thing standing between
 a new user and a screen that looks broken. If you change `readinessCopy`, re-read §17 — the copy
@@ -281,6 +310,7 @@ Append one line per loop. Keep it short and factual.
 | 13   | `buildInsights` + `useInsights` + `FindingCard` + `outcomeLabels`. **Insights screen is real.**         | 662 tests, verify green, bundle builds |
 | 14   | `findingDetail` + **pattern detail screen** (§51), wired from Insights. Route-registration test added.  | 710 tests, verify green, bundle builds |
 | 15   | `gutMap` + **Gut Map section** (§52) — every factor examined, including the ones that came to nothing.  | 734 tests, verify green, bundle builds |
+| 16   | `trends` + `TrendChart` (§49) — bars not lines, gaps left empty. **Milestone 9 complete.**              | 759 tests, verify green, bundle builds |
 
 ---
 
@@ -371,6 +401,10 @@ things in particular need eyes rather than assertions:
   safety and tone but not for whether it lands.
 - **A populated screen**, which no test can show you: the fixtures prove the arithmetic, not
   whether four finding cards stacked together read as calm or as alarming.
+- **The trend charts.** They are the first drawn thing in the app and were built without ever
+  being seen. Bar proportions, the density of thirteen weekly bars on a phone, and whether the
+  gaps actually read as gaps rather than as rendering faults are all judgements a test cannot
+  make. The chart is deliberately plain; whether it is too plain is your call.
 - **The Gut Map's length.** It lists every factor the engine examined, and on a well-logged diary
   that could be thirty rows under four headings. The tests prove it groups correctly; they cannot
   tell you whether it is still a _map_ at that size or has become a wall. If it is a wall, the
