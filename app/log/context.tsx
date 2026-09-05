@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -16,6 +16,7 @@ import {
   type ContextType,
   type ExerciseLevel,
 } from '@/domain/logs/context';
+import { useContextLogForEdit, useUpdateContextLog } from '@/features/logs/useEditLog';
 import { useLogContext } from '@/features/logs/useSimpleLogs';
 import { useTheme } from '@/theme';
 
@@ -52,9 +53,29 @@ export default function LogContextScreen() {
   const [level, setLevel] = useState<number>(3);
   const [exercise, setExercise] = useState<ExerciseLevel>('moderate');
   const [note, setNote] = useState<string>('');
-  const [minutesAgo, setMinutesAgo] = useState<number>(0);
+  // null means "leave the time as it is": now for a new entry, the original for an edit.
+  const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // --- Editing an existing entry (spec §48) ---
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = Boolean(id);
+  const existing = useContextLogForEdit(id);
+  const saveEdit = useUpdateContextLog();
+
+  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
+
+  // Adjusting state during render rather than in an effect: React applies it before anything
+  // is painted, so the form never flashes its defaults before the loaded entry appears. The
+  // id guard makes it run once per entry loaded, not on every render.
+  if (existing.data && prefilledFrom !== existing.data.id) {
+    setPrefilledFrom(existing.data.id);
+    setContextType(existing.data.contextType);
+    if (existing.data.valueNumeric !== null) setLevel(existing.data.valueNumeric);
+    if (existing.data.valueText !== null) setExercise(existing.data.valueText as ExerciseLevel);
+    setNote(existing.data.note ?? '');
+  }
 
   const isExercise = contextType === 'exercise';
   const scaleEnds = isExercise ? null : SCALE_LABELS[contextType];
@@ -67,7 +88,11 @@ export default function LogContextScreen() {
       contextType,
       valueNumeric: isExercise ? null : level,
       valueText: isExercise ? exercise : null,
-      occurredAt: occurrenceFrom(minutesAgo),
+      // An untouched time on an edit keeps the original instant.
+      occurredAt:
+        minutesAgo === null && existing.data
+          ? new Date(existing.data.occurredAt)
+          : occurrenceFrom(minutesAgo ?? 0),
       note: note.trim() === '' ? undefined : note.trim(),
     };
 
@@ -79,7 +104,9 @@ export default function LogContextScreen() {
     }
 
     try {
-      await logContext.mutateAsync(parsed.data);
+      if (id) await saveEdit.mutateAsync({ id, draft: parsed.data });
+      else await logContext.mutateAsync(parsed.data);
+
       router.back();
     } catch {
       setSubmitError('That could not be saved on this device. Please try again.');
@@ -92,7 +119,7 @@ export default function LogContextScreen() {
     <Screen scroll>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.md }}>
         <View style={{ gap: theme.spacing.xxs }}>
-          <Text variant="section">Stress and context</Text>
+          <Text variant="section">{isEditing ? 'Edit this entry' : 'Stress and context'}</Text>
           <Text variant="caption" color="secondary">
             These help GutSignal tell apart things that tend to happen together.
           </Text>
@@ -201,7 +228,7 @@ export default function LogContextScreen() {
               <Chip
                 key={option.key}
                 label={option.label}
-                selected={minutesAgo === option.minutesAgo}
+                selected={(minutesAgo ?? (isEditing ? null : 0)) === option.minutesAgo}
                 onPress={() => setMinutesAgo(option.minutesAgo)}
               />
             ))}

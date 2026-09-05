@@ -87,6 +87,17 @@ export default function RootLayout() {
                         headerShown: false,
                       }}
                     />
+                    {/* Wellbeing normally saves in one tap; this is for editing one. */}
+                    <Stack.Screen
+                      name="log/wellbeing"
+                      options={{
+                        presentation: 'formSheet',
+                        sheetAllowedDetents: [0.9],
+                        sheetCornerRadius: 28,
+                        sheetGrabberVisible: true,
+                        headerShown: false,
+                      }}
+                    />
                     {/* Stress, sleep and exercise. */}
                     <Stack.Screen
                       name="log/context"

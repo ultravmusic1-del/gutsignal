@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 import { z } from 'zod';
@@ -14,6 +14,7 @@ import {
   type SymptomDraft,
 } from '@/domain/logs/symptom';
 import { SYMPTOMS } from '@/domain/onboarding/options';
+import { useSymptomLogForEdit, useUpdateSymptomLog } from '@/features/logs/useEditLog';
 import { useLogSymptom } from '@/features/logs/useSymptomLogs';
 import { useTheme } from '@/theme';
 
@@ -61,9 +62,16 @@ export default function LogSymptomScreen() {
   const router = useRouter();
   const logSymptom = useLogSymptom();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [minutesAgo, setMinutesAgo] = useState<number>(0);
+  // null means "leave the time as it is": now for a new entry, the original for an edit.
+  const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
-  const { control, handleSubmit, formState } = useForm<SymptomFormValues>({
+  // --- Editing an existing entry (spec §48) ---
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = Boolean(id);
+  const existing = useSymptomLogForEdit(id);
+  const saveEdit = useUpdateSymptomLog();
+
+  const { control, handleSubmit, formState, reset } = useForm<SymptomFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { symptomType: 'bloating', severity: 5, note: undefined },
     mode: 'onSubmit',
@@ -71,6 +79,17 @@ export default function LogSymptomScreen() {
 
   // useWatch rather than watch(): the latter cannot be memoized safely across renders.
   const severity = useWatch({ control, name: 'severity' });
+
+  // Fill the form once the entry being edited has loaded.
+  useEffect(() => {
+    if (!existing.data) return;
+
+    reset({
+      symptomType: existing.data.symptomType,
+      severity: existing.data.severity,
+      note: existing.data.note ?? undefined,
+    });
+  }, [existing.data, reset]);
 
   /**
    * The occurrence instant is resolved here, at submit, rather than when the offset is chosen.
@@ -82,10 +101,21 @@ export default function LogSymptomScreen() {
   const onSubmit = async (values: SymptomFormValues) => {
     setSubmitError(null);
 
-    const draft: SymptomDraft = { ...values, occurredAt: occurrenceFrom(minutesAgo) };
+    // An untouched time on an edit keeps the original instant. Recomputing it from "now"
+    // would silently move the entry every time the user corrected a typo.
+    const occurredAt =
+      minutesAgo === null && existing.data
+        ? new Date(existing.data.occurredAt)
+        : occurrenceFrom(minutesAgo ?? 0);
+
+    const draft: SymptomDraft = { ...values, occurredAt };
 
     try {
-      await logSymptom.mutateAsync(symptomDraftSchema.parse(draft));
+      const parsed = symptomDraftSchema.parse(draft);
+
+      if (id) await saveEdit.mutateAsync({ id, draft: parsed });
+      else await logSymptom.mutateAsync(parsed);
+
       router.back();
     } catch {
       // Reaching here means local storage itself refused the write, which is the only failure
@@ -98,7 +128,7 @@ export default function LogSymptomScreen() {
     <Screen scroll>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.md }}>
         <View style={{ gap: theme.spacing.xxs }}>
-          <Text variant="section">How are you feeling?</Text>
+          <Text variant="section">{isEditing ? 'Edit this entry' : 'How are you feeling?'}</Text>
           <Text variant="caption" color="secondary">
             Saved on this device straight away, and synced when you have a connection.
           </Text>
@@ -208,7 +238,7 @@ export default function LogSymptomScreen() {
               <Chip
                 key={option.key}
                 label={option.label}
-                selected={minutesAgo === option.minutesAgo}
+                selected={(minutesAgo ?? (isEditing ? null : 0)) === option.minutesAgo}
                 onPress={() => setMinutesAgo(option.minutesAgo)}
               />
             ))}

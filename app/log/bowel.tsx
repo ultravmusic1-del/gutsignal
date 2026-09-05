@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 import { z } from 'zod';
@@ -16,6 +16,7 @@ import {
   urgencyLabel,
   type BowelDraft,
 } from '@/domain/logs/bowel';
+import { useBowelLogForEdit, useUpdateBowelLog } from '@/features/logs/useEditLog';
 import { useLogBowel } from '@/features/logs/useSimpleLogs';
 import { useTheme } from '@/theme';
 
@@ -51,9 +52,16 @@ export default function LogBowelScreen() {
   const logBowel = useLogBowel();
 
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [minutesAgo, setMinutesAgo] = useState<number>(0);
+  // null means "leave the time as it is": now for a new entry, the original for an edit.
+  const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
-  const { control, handleSubmit, formState } = useForm<BowelFormValues>({
+  // --- Editing an existing entry (spec §48) ---
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = Boolean(id);
+  const existing = useBowelLogForEdit(id);
+  const saveEdit = useUpdateBowelLog();
+
+  const { control, handleSubmit, formState, reset } = useForm<BowelFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       bristolType: 4,
@@ -67,13 +75,36 @@ export default function LogBowelScreen() {
 
   const bristolType = useWatch({ control, name: 'bristolType' });
 
+  // Fill the form once the entry being edited has loaded.
+  useEffect(() => {
+    if (!existing.data) return;
+
+    reset({
+      bristolType: existing.data.bristolType,
+      urgency: existing.data.urgency,
+      difficulty: existing.data.difficulty,
+      incomplete: existing.data.incomplete,
+      note: existing.data.note ?? undefined,
+    });
+  }, [existing.data, reset]);
+
   const onSubmit = async (values: BowelFormValues) => {
     setSubmitError(null);
 
-    const draft: BowelDraft = { ...values, occurredAt: occurrenceFrom(minutesAgo) };
+    // An untouched time on an edit keeps the original instant.
+    const occurredAt =
+      minutesAgo === null && existing.data
+        ? new Date(existing.data.occurredAt)
+        : occurrenceFrom(minutesAgo ?? 0);
+
+    const draft: BowelDraft = { ...values, occurredAt };
 
     try {
-      await logBowel.mutateAsync(bowelDraftSchema.parse(draft));
+      const parsed = bowelDraftSchema.parse(draft);
+
+      if (id) await saveEdit.mutateAsync({ id, draft: parsed });
+      else await logBowel.mutateAsync(parsed);
+
       router.back();
     } catch {
       setSubmitError('That could not be saved on this device. Please try again.');
@@ -84,7 +115,7 @@ export default function LogBowelScreen() {
     <Screen scroll>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.md }}>
         <View style={{ gap: theme.spacing.xxs }}>
-          <Text variant="section">Bowel movement</Text>
+          <Text variant="section">{isEditing ? 'Edit this entry' : 'Bowel movement'}</Text>
           <Text variant="caption" color="secondary">
             Saved on this device straight away, and synced when you have a connection.
           </Text>
@@ -222,7 +253,7 @@ export default function LogBowelScreen() {
               <Chip
                 key={option.key}
                 label={option.label}
-                selected={minutesAgo === option.minutesAgo}
+                selected={(minutesAgo ?? (isEditing ? null : 0)) === option.minutesAgo}
                 onPress={() => setMinutesAgo(option.minutesAgo)}
               />
             ))}

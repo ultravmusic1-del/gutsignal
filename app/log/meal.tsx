@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 import { z } from 'zod';
@@ -17,6 +17,7 @@ import {
   type MealDraft,
 } from '@/domain/logs/meal';
 import { formatLocalTime } from '@/domain/time/occurrence';
+import { useMealForEdit, useUpdateMeal } from '@/features/logs/useEditLog';
 import { useLogMeal, useRecentMeals, useRepeatMeal } from '@/features/logs/useMealLogs';
 import { useTheme } from '@/theme';
 
@@ -60,15 +61,36 @@ export default function LogMealScreen() {
   const recent = useRecentMeals();
 
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [minutesAgo, setMinutesAgo] = useState<number>(0);
+  // null means "leave the time as it is": now for a new meal, the original for an edit.
+  const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
-  const { control, handleSubmit, formState } = useForm<MealFormValues>({
+  // --- Editing an existing meal (spec §48) ---
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = Boolean(id);
+  const existing = useMealForEdit(id);
+  const saveEdit = useUpdateMeal();
+
+  const { control, handleSubmit, formState, reset } = useForm<MealFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { title: '', itemText: '', mealSize: 'medium', tags: [], note: undefined },
     mode: 'onSubmit',
   });
 
   const itemText = useWatch({ control, name: 'itemText' });
+
+  // Fill the form once the meal being edited has loaded. Items go back into the text field the
+  // way the user would have typed them, so editing feels like editing rather than re-entering.
+  useEffect(() => {
+    if (!existing.data) return;
+
+    reset({
+      title: existing.data.title,
+      itemText: existing.data.items.map((item) => item.rawName).join(', '),
+      mealSize: existing.data.mealSize,
+      tags: existing.data.tags,
+      note: existing.data.note ?? undefined,
+    });
+  }, [existing.data, reset]);
   const parsedItems = parseItemList(itemText ?? '');
 
   const onSubmit = async (values: MealFormValues) => {
@@ -80,11 +102,19 @@ export default function LogMealScreen() {
       mealSize: values.mealSize,
       tags: values.tags,
       note: values.note,
-      occurredAt: occurrenceFrom(minutesAgo),
+      // An untouched time on an edit keeps the original instant.
+      occurredAt:
+        minutesAgo === null && existing.data
+          ? new Date(existing.data.occurredAt)
+          : occurrenceFrom(minutesAgo ?? 0),
     };
 
     try {
-      await logMeal.mutateAsync(mealDraftSchema.parse(draft));
+      const parsed = mealDraftSchema.parse(draft);
+
+      if (id) await saveEdit.mutateAsync({ id, draft: parsed });
+      else await logMeal.mutateAsync(parsed);
+
       router.back();
     } catch {
       setSubmitError('That could not be saved on this device. Please try again.');
@@ -95,7 +125,8 @@ export default function LogMealScreen() {
     setSubmitError(null);
 
     try {
-      await repeat.mutateAsync({ sourceMealId, occurredAt: occurrenceFrom(minutesAgo) });
+      // Repeating always records a new meal, so an untouched time means now.
+      await repeat.mutateAsync({ sourceMealId, occurredAt: occurrenceFrom(minutesAgo ?? 0) });
       router.back();
     } catch {
       setSubmitError('That meal could not be repeated. Please try again.');
@@ -108,7 +139,7 @@ export default function LogMealScreen() {
     <Screen scroll>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.md }}>
         <View style={{ gap: theme.spacing.xxs }}>
-          <Text variant="section">What did you eat?</Text>
+          <Text variant="section">{isEditing ? 'Edit this meal' : 'What did you eat?'}</Text>
           <Text variant="caption" color="secondary">
             Saved on this device straight away, and synced when you have a connection.
           </Text>
@@ -124,7 +155,7 @@ export default function LogMealScreen() {
               <Chip
                 key={option.key}
                 label={option.label}
-                selected={minutesAgo === option.minutesAgo}
+                selected={(minutesAgo ?? (isEditing ? null : 0)) === option.minutesAgo}
                 onPress={() => setMinutesAgo(option.minutesAgo)}
               />
             ))}
@@ -132,7 +163,8 @@ export default function LogMealScreen() {
         </View>
 
         {/* --- Repeat (spec §40) --- */}
-        {recentMeals.length > 0 ? (
+        {/* Repeating is for recording a second meal, which is not what editing one is. */}
+        {!isEditing && recentMeals.length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>
             <Text variant="overline" color="secondary">
               HAD THIS AGAIN?
@@ -302,7 +334,7 @@ export default function LogMealScreen() {
 
         <View style={{ gap: theme.spacing.sm }}>
           <Button
-            label="Save meal"
+            label={isEditing ? 'Save changes' : 'Save meal'}
             size="large"
             onPress={handleSubmit(onSubmit)}
             loading={formState.isSubmitting}
