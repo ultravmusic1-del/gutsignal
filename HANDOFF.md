@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 6** · Update the date and loop number every
+Last updated: **2026-09-06, loop 7** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 20 commits ahead of `main`, pushed                |
+| Current branch    | `feat/m6-timeline` — 22 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **482 passing**, 31 suites                                             |
+| Tests             | **498 passing**, 32 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -100,14 +100,13 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   Overlap is **imbalance** (`|P(other|target) − P(other|not target)|`), not similarity: a factor
   spread evenly across both groups explains nothing however often it co-occurs.
   `CONFOUNDER_THRESHOLD` = 0.6.
+- `engine.ts` + 16 tests — **`analyse({ logs, range, now })` → `Finding[]`.** The whole pass is
+  wired: days → candidates → observations → compare → confounders → confidence → status.
+  Deterministic (tests assert identical output and order-independence). Returns negatives too.
+  Outcomes derived from what the diary contains via `outcomesFor()`. Inject `now` in tests.
 
 **Pick up here, in this order:**
 
-0. **`engine.ts` — the missing seam.** Every piece now exists but nothing joins them. Write the
-   function that takes a `LogSet` + range and returns `Finding[]`: build days → candidate
-   factors → for each factor/outcome pair build observations, compare, find confounders, assess
-   confidence, score status → assemble a `Finding` (all of §62's reproducibility fields, with
-   `ENGINE_VERSION` and `generatedAt`). This is what makes the fixtures in step 3 possible.
 1. `multiple-testing.ts` — conservative control for scanning many factors (§61).
 2. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
    acceptance criterion. Build them as real synthetic log sets and assert the classification each
@@ -198,6 +197,7 @@ Append one line per loop. Keep it short and factual.
 | 4    | `comparisons.ts` + 28 tests — counts, rates, severity, Newcombe interval, weekly consistency.           | 445 tests, verify green                |
 | 5    | `confidence.ts` + `scoring.ts` + 23 tests — weakest-link confidence, count-gated status.                | 468 tests, verify green                |
 | 6    | `confounders.ts` + 14 tests — imbalance-based entanglement, not similarity.                             | 482 tests, verify green                |
+| 7    | `engine.ts` + 16 tests — `analyse()` joins the whole pass; deterministic end to end.                    | 498 tests, verify green                |
 
 ---
 
