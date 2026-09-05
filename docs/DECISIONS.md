@@ -833,3 +833,43 @@ rather than restating it, so a new column cannot be silently dropped on write; t
 names come from our row types, never user input, and values are always bound. And SQLite has no
 boolean, while the row shape is _also_ the wire format sent to Postgres where the column really
 is a boolean — so rows carry `true`/`false` and are narrowed to 1/0 on the way into SQLite only.
+
+---
+
+## ADR-0037 — The timeline is one paginated union, paged by keyset
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+**Context.** The timeline is a single chronological diary drawn from five separate tables, and
+Milestone 6's acceptance criterion is that it stays smooth on a large dataset.
+
+**Alternatives considered.** (a) Query each table, merge in memory, page the merged list.
+(b) Maintain a denormalised index table written alongside every log. (c) One `UNION ALL` over
+the five tables that reads only the columns needed to _place_ an entry, then fill in the detail
+for the page.
+
+**Reason.** (c).
+
+(a) cannot page correctly without over-fetching: to know the newest forty entries overall you
+must fetch forty from each table and discard most, and to reach page fifty you must fetch two
+thousand from each. The cost grows with depth, which is exactly what the criterion forbids.
+
+(b) is the fastest to read and the easiest to corrupt. Every write path would have to maintain
+it, and a missed update means an entry that exists but is invisible — the failure mode this
+product can least afford.
+
+**Consequences.** A page costs one union query plus at most one query per kind present: six
+queries for a page of forty, not forty-one. The union's arms are individually limited as well as
+the outer query, so a search matching ten thousand meals still sorts only what a page could need.
+
+**Paging is keyset, not `OFFSET`.** `OFFSET 5000` makes SQLite walk and discard five thousand
+rows before returning anything; a cursor on `(occurred_at, id)` makes every page cost the same.
+A diary is append-mostly, and the deep pages are precisely the ones a long-term user scrolls to.
+
+The `id` tiebreaker is load-bearing rather than cosmetic. Two entries can share a timestamp to
+the millisecond — a meal and the symptom logged in the same breath — and without a total order
+one would repeat on the next page while another silently vanished. There is a test for exactly
+that.
+
+Verified against ten thousand entries: a page twenty-five deep costs about the same as the
+first, and a full-text search across all of them returns in a fraction of a second.

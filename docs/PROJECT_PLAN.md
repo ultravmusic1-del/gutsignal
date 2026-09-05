@@ -841,6 +841,48 @@ explicitly.
 **What is left in Milestone 5:** the airplane-mode verification itself. Every log type the
 milestone calls for now writes offline, queues durably and syncs bidirectionally.
 
+### 12.8 Milestone 6 — Timeline (2026-08-24)
+
+Verified on Windows: `tsc --noEmit` clean, `eslint` clean, **357 tests passing**, iOS Metro
+bundle builds. `expo-doctor` 20/21 — see the note below, which is not caused by this work.
+
+| Area       | Delivered                                                                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Query      | One `UNION ALL` across all five log tables, paged by keyset cursor on `(occurred_at, id)` (ADR-0037)                                    |
+| Pagination | Infinite scroll over a virtualized `SectionList`; a page costs six queries regardless of size                                           |
+| Grouping   | Day sections with sticky headers, reading `occurred_local_date` — never the instant                                                     |
+| Filters    | Six type filters, held in a Zustand store so browsing survives opening an entry (spec §337)                                             |
+| Search     | Across meal titles, **meal item names** and notes on every type, as a SQL `LIKE` over local storage                                     |
+| Edit       | All five kinds. Tapping an entry opens its own form prefilled; saving goes through the same atomic path and coalesces to one outbox row |
+| Delete     | Tombstone behind a confirmation, from both the Timeline and Today                                                                       |
+| Sync state | Per-entry, from the outbox join                                                                                                         |
+| Shared     | Today and the Timeline now use one entry mapping and one row component, so the two screens cannot drift                                 |
+
+**Acceptance criterion — met, on Windows.** Ten thousand entries across all five tables: a page
+twenty-five deep reads about as fast as the first, and searching all of them returns in a
+fraction of a second. Both are asserted in the test suite rather than measured by hand. What
+this does _not_ establish is scroll smoothness on a device, which is the other half of "smooth"
+and still needs an iPhone.
+
+**Editing preserves identity.** An edit keeps the entry's id and `createdAt` and, unless the
+user picks a new time, its original instant — correcting a typo must not silently move an entry
+to now. Recording something a second time is Repeat, which is a different thing and stays
+separate.
+
+**Two decisions worth naming.** Wellbeing gained a screen it did not have, purely so those
+entries can be corrected from the timeline; recording one is still a single tap and never opens
+it, and it still has no rating. Meal editing rebuilds items from the draft rather than diffing
+them, matching how both the local write and the server function already replace contents.
+
+**`expo-doctor` is 20/21, and was 21/21 earlier the same day.** The failing check is
+"packages match versions required by installed Expo SDK": thirteen Expo packages published new
+_patch_ releases within the SDK 57 line during this work. It is upstream drift, reproducible on
+the previous commit, and unrelated to the timeline. `npx expo install --fix` was attempted and
+reverted: it moves `react-native` to 0.86.3, which hits a real peer conflict with
+`jest-expo`'s pinned `@react-native/jest-preset`. Forcing past that is exactly the class of
+change ADR-0023 warns builds fine on Windows and fails on EAS, so it is left for a deliberate
+dependency pass rather than folded into a feature milestone.
+
 Documents still to be written (at the milestone that needs them): `ARCHITECTURE.md`,
 `TEST_PLAN.md`, `AI_ARCHITECTURE.md` (M7), `PATTERN_ENGINE.md` (M8),
 `APP_STORE_RELEASE.md` (M12), `PRIVACY_SECURITY.md` (M16). `DATABASE.md` was written
