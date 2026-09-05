@@ -17,12 +17,16 @@
  * The outcomes scanned are derived from what the user has actually logged. Scanning for bowel
  * outcomes in a diary with no bowel entries would produce a page of "not enough data" that says
  * more about the scan than about the person.
+ *
+ * The scan's own breadth is accounted for before anything is returned: this pass routinely makes
+ * dozens of comparisons, and `multiple-testing.ts` shrinks confidence accordingly (§61).
  */
 
 import { compare, weeklyConsistency } from './comparisons';
 import { assessConfidence } from './confidence';
 import { findConfounders, maxOverlap } from './confounders';
 import { candidateFactors, type CandidateLimits } from './exposures';
+import { applyMultipleTestingControl } from './multiple-testing';
 import {
   buildDays,
   buildObservations,
@@ -163,9 +167,14 @@ export function analyse({
     }
   }
 
+  // The breadth control runs before the sort, because it can change a status and therefore
+  // where a finding belongs in the list. A finding must be ranked by what it is *after* the
+  // scan's own width has been accounted for (§61).
+  const controlled = applyMultipleTestingControl(findings);
+
   // Most substantiated first, then by confidence, then alphabetically — a total order, so the
   // same diary always produces the same list in the same sequence.
-  return findings.sort(
+  return controlled.sort(
     (left, right) =>
       STATUS_RANK[right.status] - STATUS_RANK[left.status] ||
       right.confidence - left.confidence ||

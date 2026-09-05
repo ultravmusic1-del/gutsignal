@@ -3,6 +3,7 @@ import type { SymptomLog } from '@/domain/logs/symptom';
 import type { WellbeingLog } from '@/domain/logs/wellbeing';
 
 import { analyse, outcomesFor } from '../engine';
+import { FREE_COMPARISONS } from '../multiple-testing';
 import type { LogSet } from '../observations';
 import { ENGINE_VERSION } from '../types';
 
@@ -278,5 +279,72 @@ describe('analyse — safety', () => {
     for (const finding of run(thin)) {
       if (finding.confidence < 0.6) expect(finding.limitations.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('analyse — the scan accounts for its own breadth', () => {
+  /**
+   * The association from `diary`, plus five unrelated tags rotating through the same days.
+   *
+   * Each extra tag lands on roughly a sixth of the range, which is enough days to qualify as a
+   * candidate and enough absent days to compare against — so the engine really does make dozens
+   * of comparisons, which is the situation §61 exists for.
+   */
+  function wideDiary(): LogSet {
+    const core = diary({ strength: 0.9, background: 0.1 });
+    const noise: Meal['tags'][number][] = [
+      'alcoholic',
+      'spicy',
+      'rich_high_fat',
+      'restaurant',
+      'homemade',
+    ];
+
+    const extras = ALL.map((date, i) => ({
+      ...meal(date, [noise[i % noise.length]!]),
+      id: `noise-${i}`,
+    }));
+
+    return { ...core, meals: [...core.meals, ...extras] };
+  }
+
+  it('does not penalise a narrow scan', () => {
+    // The plain diary has one factor and a handful of outcomes: ordinary analysis, not a
+    // fishing expedition, and nothing to apologise for.
+    const findings = run(diary({ strength: 0.9, background: 0.1 }));
+
+    expect(findings.length).toBeLessThanOrEqual(FREE_COMPARISONS);
+    expect(findings.every((f) => f.limitations.every((line) => !/combinations/.test(line)))).toBe(
+      true
+    );
+  });
+
+  it('tells the user how many comparisons a wide scan made', () => {
+    const findings = run(wideDiary());
+
+    expect(findings.length).toBeGreaterThan(FREE_COMPARISONS);
+    expect(findings.every((f) => f.limitations.some((line) => /combinations/.test(line)))).toBe(
+      true
+    );
+  });
+
+  it('holds a comparison in a wide scan to a higher bar than the same one alone', () => {
+    const logs = wideDiary();
+
+    const alone = analyse({
+      logs,
+      range: RANGE,
+      now: NOW,
+      outcomes: [{ kind: 'symptom_occurrence', symptomType: 'bloating' }],
+      limits: { minExposedDays: 4, minControlDays: 4, minItemMentions: 3 },
+    }).find((f) => f.factor.key === 'caffeinated');
+
+    const amongMany = run(logs).find(
+      (f) => f.factor.key === 'caffeinated' && f.outcome.kind === 'symptom_occurrence'
+    );
+
+    expect(alone).toBeDefined();
+    expect(amongMany).toBeDefined();
+    expect(amongMany!.confidence).toBeLessThan(alone!.confidence);
   });
 });
