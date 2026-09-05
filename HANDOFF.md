@@ -234,4 +234,27 @@ Things only he can do. **Add to this list; do not act on it.**
 
 ### Anything a loop got stuck on
 
+#### 🔴 The Supabase project is PAUSED — blocks all database work
+
+`get_project` reports `"status": "INACTIVE"` for `mrqxmkxhyohlywiziofz`, and every query and
+migration times out with "Connection terminated due to connection timeout". Free-tier projects
+pause after a period of inactivity.
+
+**What you need to do:** restore it from the Supabase dashboard (Project → Settings, or the
+"Restore project" prompt on the project home). It takes a few minutes.
+
+**Why a loop did not do it itself:** restoring a paused project is an infrastructure action with
+billing implications, not a migration. The overnight permissions cover applying migrations, and
+§2 says anything not clearly permitted is not permitted.
+
+**State to be aware of before retrying:**
+
+- `supabase/migrations/20260906090000_pattern_findings.sql` is **written and committed but NOT
+  applied.** The failure happened at "Failed to initialise history table", before any schema
+  change ran, so the table almost certainly does not exist — but **verify before re-applying**:
+  `select to_regclass('public.pattern_findings');`
+- `supabase/tests/rls_isolation.sql` does **not** yet cover `pattern_findings`. It must before
+  that table is considered done (`CLAUDE.md` §14).
+- Nothing else is blocked. Loops after this one worked on local-only code.
+
 _(Nothing yet.)_
