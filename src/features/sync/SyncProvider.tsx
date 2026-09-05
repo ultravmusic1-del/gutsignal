@@ -25,6 +25,15 @@ export type SyncState = {
   pendingCount: number;
   /** Requests a sync. Never throws — callers are UI code that must not care. */
   syncNow: () => void;
+  /**
+   * Runs a sync and waits for it.
+   *
+   * Only for the one place that genuinely has to know the outcome before continuing: sign-out,
+   * which must send what it can before telling the user what is left (`CLAUDE.md` §15). Everywhere
+   * else should use `syncNow` and carry on — waiting on the network is exactly what the offline
+   * design exists to avoid.
+   */
+  flush: () => Promise<void>;
   /** Re-reads the pending count. Called after a local write. */
   refresh: () => void;
 };
@@ -32,6 +41,7 @@ export type SyncState = {
 const SyncContext = createContext<SyncState>({
   pendingCount: 0,
   syncNow: () => {},
+  flush: async () => {},
   refresh: () => {},
 });
 
@@ -60,6 +70,18 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, []);
+
+  const flush = useCallback(async () => {
+    try {
+      await engineRef.current?.syncNow();
+    } catch {
+      // A failed flush is not an error to report: the caller's next step is to count what is
+      // still outstanding, and that count is the same whether the attempt failed or found no
+      // connection at all.
+    } finally {
+      refresh();
+    }
+  }, [refresh]);
 
   const syncNow = useCallback(() => {
     void (async () => {
@@ -144,8 +166,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const value = useMemo<SyncState>(
-    () => ({ pendingCount: userId === null ? 0 : pending, syncNow, refresh }),
-    [userId, pending, syncNow, refresh]
+    () => ({ pendingCount: userId === null ? 0 : pending, syncNow, flush, refresh }),
+    [userId, pending, syncNow, flush, refresh]
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

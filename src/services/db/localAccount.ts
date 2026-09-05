@@ -16,9 +16,10 @@
  * because the failure is silent and the cost of the extra `DELETE` is nothing.
  *
  * **On discarding unsent work.** §15 forbids silently discarding an unsynchronised record, and
- * clearing a departed user's rows can do exactly that. The honest fix belongs at sign-out, where
- * that user is still present and can be told; this function therefore *counts* what it discards
- * and returns it, so a caller can never do it without being handed the number.
+ * clearing a departed user's rows can do exactly that. Sign-out is the only moment where it can be
+ * said to the person it belongs to, so that is where it is said — `features/auth/signOutPlan.ts`
+ * flushes, counts what is left and names it before continuing. This module is the second line:
+ * it *counts* what it discards and returns the number, so no caller can do it unknowingly.
  */
 
 import type { SqlDatabase } from './sqlite';
@@ -155,10 +156,11 @@ export async function wipeLocalDataExcept(
  * their own `user_id` — refusing to start would trade a defence-in-depth measure for an app that
  * does not open.
  *
- * The `unsentDiscarded` count is deliberately surfaced rather than dropped. §15 forbids silently
- * discarding an unsynchronised record, and the uncomfortable truth is that by this point its owner
- * has gone and there is nobody left to tell — which is why the real fix belongs at sign-out, where
- * they are still present. Until that exists, this at least refuses to be silent to a developer.
+ * The `unsentDiscarded` count is deliberately surfaced rather than dropped. Sign-out now flushes
+ * and warns before this can happen (`features/auth/signOutPlan.ts`), so reaching here with a
+ * non-zero count means one of two things: the user was told and signed out anyway, or the app
+ * never got a clean sign-out at all — a force-quit, or a session revoked from elsewhere. Neither
+ * is silent by then, but the count is still worth a developer's attention.
  */
 export async function clearOtherAccountsFromDevice(
   db: SqlDatabase,
@@ -172,7 +174,8 @@ export async function clearOtherAccountsFromDevice(
       console.warn(
         `[localAccount] Cleared ${result.owners.length} other account(s) from this device, ` +
           `discarding ${result.unsentDiscarded} entr${result.unsentDiscarded === 1 ? 'y' : 'ies'} ` +
-          'the server had not accepted. Sign-out should flush the outbox before this can happen.'
+          'the server had not accepted. Either the user was warned at sign-out and continued, or ' +
+          'this device never got a clean sign-out.'
       );
     }
 
