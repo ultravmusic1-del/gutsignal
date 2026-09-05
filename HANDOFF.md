@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 12** · Update the date and loop number every
+Last updated: **2026-09-06, loop 13** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,14 +41,14 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 33 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 35 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **637 passing**, 37 suites                                       |
+| Tests             | **662 passing**, 39 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
 
-**Milestones 0–6 are built.** Onboarding, auth, all five log types writing offline with a durable
+**Milestones 0–6 and 8 are built.** Onboarding, auth, all five log types writing offline with a durable
 outbox and bidirectional sync, and the timeline with pagination, filters, search, edit and delete.
 
 ### The single most important caveat
@@ -127,27 +127,44 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   SQLite in the shape `analyse()` takes, plus `defaultAnalysisRange()` (90 days). Every
   repository gained a `listBetween` range reader. Findings are **recomputed from local logs**,
   never fetched — insights work offline and always match the user's own timeline.
-- `domain/patterns/insights.ts` + 24 tests — `whatStandsOut()`, `worthInvestigating()`,
-  `summarise()`, and **`assessReadiness()` + `readinessCopy()`**, which explain _why_ there is
-  nothing to show. Five kinds of silence, led by "symptoms logged but no good days" — the biggest
-  unlock and the smallest ask. Copy is tested for no blame, no causal language, and no promise
-  that a finding will appear.
+- `domain/patterns/insights.ts` + 29 tests — `whatStandsOut()`, `worthInvestigating()`,
+  `summarise()`, **`assessReadiness()` + `readinessCopy()`**, and `buildInsights()` which composes
+  the lot in one pure pass. Five kinds of silence, led by "symptoms logged but no good days" — the
+  biggest unlock and the smallest ask. Copy is tested for no blame, no causal language, and no
+  promise that a finding will appear.
+- `features/insights/useInsights.ts` — `loadLogSet` → `buildInsights`, cached with TanStack Query
+  on `['insights', userId, start, end]`, 60s stale time. Reads local SQLite only; nothing here
+  touches Supabase.
+- `domain/patterns/outcomeLabels.ts` + 8 tests — how an outcome is named to a person. In `domain`
+  because it is a §17 safety boundary: every surface describing a finding must name the outcome
+  identically, and none may name a condition. Tested against a clinical-vocabulary list.
+- `features/insights/FindingCard.tsx` + 9 tests — one finding as a person reads it. Association
+  language, both rates **with their denominators**, the unknown-day count, limitations inline
+  rather than behind a tap, and the status as text (§36). Optional `onPress` for when detail
+  exists; it is not a button until then.
+- **`app/(tabs)/insights.tsx` — the screen is real.** Loading, error, the two sections, and the
+  readiness-explaining empty state. The engine-scale summary line is suppressed when nothing is
+  ready, because `readinessCopy` already carries that number in an actionable sentence.
 
 **Blocked:** persisting findings. The migration is written and committed but unapplied because
 the Supabase project is paused — see §7. Do not retry until the owner restores it.
 
 **Pick up here:**
 
-1. **A hook to run the engine.** `useInsights()`: `loadLogSet` → `analyse` → cache with TanStack
-   Query, keyed on user and range. Follow `useTimeline` for the query shape. Everything it needs
-   exists; nothing calls `analyse()` from the app yet. Return the findings **and** the readiness
-   from `assessReadiness`, so the screen never has to work out why it is empty.
-2. **The Insights screen** (spec §49). Sections: "What stands out" (the 2–4 highest-value
-   findings), "Worth investigating" (emerging), and an honest empty state. **Most users will see
-   the empty state for weeks — it deserves as much care as the populated one**, and it should say
-   what the engine is waiting for rather than just "nothing yet".
-3. **Pattern detail** (spec §51) — every insight links to its evidence and its calculation. The
-   `Finding` type already carries counts, interval, consistency, confounders and limitations.
+1. **Pattern detail** (spec §51) — every insight links to its evidence and its calculation. The
+   `Finding` type already carries counts, interval, consistency, confounders, tracking
+   completeness and limitations, so nothing new needs computing; this is a presentation problem.
+   `FindingCard` already takes an `onPress`, so wiring it is a route plus a screen. Show the
+   arithmetic in full, the weeks that agreed and disagreed, and every confounder by name.
+2. **Trends** (spec §49) — symptom frequency and severity over time. Needs a chart primitive the
+   codebase does not have yet; check `CLAUDE.md` §38 before reaching for a library, and prefer
+   `react-native-svg` (already a dependency) over a charting framework.
+3. **A findings repository**, once the database is back — persist each `Finding` with its
+   `engineVersion` and `generatedAt` (§18 reproducibility). The migration exists; see §7.
+
+Note on the empty state: it is the case most users see, and it is now the only thing standing
+between a new user and a screen that looks broken. If you change `readinessCopy`, re-read §17 —
+the copy is load-bearing, not decoration.
 
 Use `PATTERN_STATUS_COPY` from `src/domain/patterns/status.ts` for all status language, and check
 any new copy describing a finding against `CLAUDE.md` §17. `docs/PATTERN_ENGINE.md` explains what
@@ -213,6 +230,7 @@ Append one line per loop. Keep it short and factual.
 | 10   | `docs/PATTERN_ENGINE.md` + 44 tests pinning it to the code. **Milestone 8 complete.**                   | 599 tests, verify green                |
 | 11   | M9 started: `logSetRepository` + 14 tests. Findings migration written but **unapplied — DB paused**.    | 613 tests, verify green                |
 | 12   | `insights.ts` + 24 tests — section selection, and honest copy for five kinds of silence.                | 637 tests, verify green                |
+| 13   | `buildInsights` + `useInsights` + `FindingCard` + `outcomeLabels`. **Insights screen is real.**         | 662 tests, verify green, bundle builds |
 
 ---
 
@@ -273,4 +291,22 @@ billing implications, not a migration. The overnight permissions cover applying 
   that table is considered done (`CLAUDE.md` §14).
 - Nothing else is blocked. Loops after this one worked on local-only code.
 
-_(Nothing yet.)_
+#### 🟡 Two small things worth knowing, neither blocking
+
+1. **The branch name has outgrown its contents.** `feat/m6-timeline` now carries Milestones 6, 8
+   and most of 9 — 35 commits. Loops kept adding to it rather than renaming mid-flight, because a
+   rename between loops would have made the morning review harder to follow, not easier. Rename or
+   split it at merge time if you prefer a cleaner history.
+2. **`npm run format:check` reports `tsconfig.json` as unformatted.** Pre-existing, untouched by
+   any loop, and not worth a noisy diff inside a feature commit. `npx prettier --write tsconfig.json`
+   clears it whenever you want a clean check.
+
+#### 🟡 Insights has never been looked at
+
+The screen is built, tested and bundles, but — like everything else — no one has seen it. Two
+things in particular need eyes rather than assertions:
+
+- **The empty state**, which is what a real new user will actually get. Its copy is tested for
+  safety and tone but not for whether it lands.
+- **A populated screen**, which no test can show you: the fixtures prove the arithmetic, not
+  whether four finding cards stacked together read as calm or as alarming.
