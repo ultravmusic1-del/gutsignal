@@ -120,6 +120,29 @@ export function mealItemFactor(rawName: string): Factor {
   return { key: rawName.toLocaleLowerCase(), label: rawName, source: 'meal_item' };
 }
 
+/**
+ * What underlying measurement a factor is a view of.
+ *
+ * `poor_sleep` and `good_sleep` are not two things that happen to travel together — they are the
+ * two ends of one question the user answered once. The same is true of `high_stress` and
+ * `low_stress`, and of small versus large meals. Treating them as each other's confounders would
+ * have the engine declare a factor inseparable from its own opposite, which is always true and
+ * never informative.
+ */
+export function measurementOf(factor: Factor): string {
+  switch (factor.source) {
+    case 'context': {
+      const definition = contextFactorDefinition(factor.key);
+      return `context:${definition?.contextType ?? factor.key}`;
+    }
+    // Sizes are points on one scale, so they describe the same measurement.
+    case 'meal_size':
+      return 'meal_size';
+    default:
+      return `${factor.source}:${factor.key}`;
+  }
+}
+
 /** Every factor that does not depend on what the user happens to have logged. */
 export function fixedFactors(): Factor[] {
   return [

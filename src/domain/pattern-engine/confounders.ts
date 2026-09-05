@@ -16,6 +16,7 @@
  * accounts for all of it and the two cannot be told apart from this diary.
  */
 
+import { measurementOf } from './factors';
 import { exposureOn, type DayLogs } from './observations';
 import type { Confounder, Factor } from './types';
 
@@ -59,14 +60,23 @@ export function findConfounders(
   candidates: Factor[],
   threshold: number = CONFOUNDER_THRESHOLD
 ): Confounder[] {
-  return candidates
-    .filter((candidate) => candidate.key !== target.key)
-    .map((factor) => ({ factor, overlap: imbalanceBetween(days, target, factor) }))
-    .filter((confounder) => confounder.overlap >= threshold)
-    .sort(
-      (left, right) =>
-        right.overlap - left.overlap || left.factor.key.localeCompare(right.factor.key)
-    );
+  const targetMeasurement = measurementOf(target);
+
+  return (
+    candidates
+      .filter((candidate) => candidate.key !== target.key)
+      // A factor is never confounded by another view of the same measurement. "Poorer sleep" is
+      // always perfectly anti-correlated with "better sleep" — they are one question, answered
+      // once — and reporting that would be true, useless, and would zero the confidence of every
+      // context finding the engine could make.
+      .filter((candidate) => measurementOf(candidate) !== targetMeasurement)
+      .map((factor) => ({ factor, overlap: imbalanceBetween(days, target, factor) }))
+      .filter((confounder) => confounder.overlap >= threshold)
+      .sort(
+        (left, right) =>
+          right.overlap - left.overlap || left.factor.key.localeCompare(right.factor.key)
+      )
+  );
 }
 
 /** The strongest entanglement found, for `assessConfidence`. Zero when nothing was entangled. */

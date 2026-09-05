@@ -220,3 +220,41 @@ describe('maxOverlap', () => {
     expect(maxOverlap([])).toBe(0);
   });
 });
+
+describe('findConfounders — the same measurement is not a confounder', () => {
+  it('never reports a factor as confounded by its own opposite', () => {
+    // Poorer sleep and better sleep are one question answered once, not two things that travel
+    // together. Reporting the perfect anti-correlation between them would be true, useless, and
+    // would zero the confidence of every context finding the engine could make.
+    const GOOD_SLEEP: Factor = { key: 'good_sleep', label: 'Better sleep', source: 'context' };
+
+    const days = buildDays(
+      {
+        ...emptySet,
+        context: [
+          ...DATES.slice(0, 10).map((date) => sleep(date, 1)),
+          ...DATES.slice(10).map((date) => sleep(date, 5)),
+        ],
+      },
+      RANGE
+    );
+
+    expect(imbalanceBetween(days, POOR_SLEEP, GOOD_SLEEP)).toBeCloseTo(1);
+    expect(findConfounders(days, POOR_SLEEP, [GOOD_SLEEP])).toEqual([]);
+  });
+
+  it('still reports a genuinely different measurement', () => {
+    const days = buildDays(
+      {
+        ...emptySet,
+        meals: DATES.slice(0, 10).map((date) => meal(date, ['caffeinated'])),
+        context: DATES.slice(0, 10).map((date) => sleep(date, 1)),
+      },
+      RANGE
+    );
+
+    expect(findConfounders(days, POOR_SLEEP, [COFFEE]).map((c) => c.factor.key)).toEqual([
+      'caffeinated',
+    ]);
+  });
+});
