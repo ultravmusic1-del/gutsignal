@@ -12,6 +12,7 @@ import { AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { openDatabase } from '@/services/db/database';
+import { clearOtherAccountsFromDevice } from '@/services/db/localAccount';
 import { createMealSyncEntity } from '@/services/logs/mealRemote';
 import { createSimpleLogEntities } from '@/services/logs/logEntities';
 import { clearCursors } from '@/services/sync/cursors';
@@ -86,6 +87,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         const db = await openDatabase();
+        if (cancelled) return;
+
+        // Before the engine, never after. Another account's rows left on this device are a §58
+        // problem on their own, and their sync watermark would make this user's first pull resume
+        // from someone else's position — so both have to be gone before anything is fetched.
+        await clearOtherAccountsFromDevice(db, userId);
         if (cancelled) return;
 
         const engine = createSyncEngine({
