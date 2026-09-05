@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 5** · Update the date and loop number every
+Last updated: **2026-09-06, loop 6** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 18 commits ahead of `main`, pushed                |
+| Current branch    | `feat/m6-timeline` — 20 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **468 passing**, 30 suites                                             |
+| Tests             | **482 passing**, 31 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -95,16 +95,24 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   gating sample size **on counts** (`MIN_GROUP_FOR_ANY_CLAIM` = 5, moderate 10, strong 15) and
   requiring a 15-point difference before saying anything at all.
   `assessConfidence` takes `maxConfounderOverlap` — currently the caller must pass 0 until
-  `confounders.ts` exists.
+  `confounders.ts` exists — **that is now available, so wire it in.**
+- `confounders.ts` + 14 tests — `findConfounders(days, target, candidates)` and `maxOverlap()`.
+  Overlap is **imbalance** (`|P(other|target) − P(other|not target)|`), not similarity: a factor
+  spread evenly across both groups explains nothing however often it co-occurs.
+  `CONFOUNDER_THRESHOLD` = 0.6.
 
 **Pick up here, in this order:**
 
-1. `confounders.ts` — co-occurrence overlap between factors (§60).
-2. `multiple-testing.ts` — conservative control for scanning many factors (§61).
-3. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
+0. **`engine.ts` — the missing seam.** Every piece now exists but nothing joins them. Write the
+   function that takes a `LogSet` + range and returns `Finding[]`: build days → candidate
+   factors → for each factor/outcome pair build observations, compare, find confounders, assess
+   confidence, score status → assemble a `Finding` (all of §62's reproducibility fields, with
+   `ENGINE_VERSION` and `generatedAt`). This is what makes the fixtures in step 3 possible.
+1. `multiple-testing.ts` — conservative control for scanning many factors (§61).
+2. `fixtures/` — **the fifteen scenarios in `CLAUDE.md` §42.** These are the milestone's
    acceptance criterion. Build them as real synthetic log sets and assert the classification each
    should produce.
-4. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
+3. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
 
 Persisting findings to a `pattern_findings` table (§62) comes after the engine computes them.
 Migrations are permitted; see §2.
@@ -189,6 +197,7 @@ Append one line per loop. Keep it short and factual.
 | 3    | `factors.ts` (thresholded context factors) and `exposures.ts` + 19 tests — candidate selection.         | 417 tests, verify green                |
 | 4    | `comparisons.ts` + 28 tests — counts, rates, severity, Newcombe interval, weekly consistency.           | 445 tests, verify green                |
 | 5    | `confidence.ts` + `scoring.ts` + 23 tests — weakest-link confidence, count-gated status.                | 468 tests, verify green                |
+| 6    | `confounders.ts` + 14 tests — imbalance-based entanglement, not similarity.                             | 482 tests, verify green                |
 
 ---
 
