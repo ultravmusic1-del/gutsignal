@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 17** · Update the date and loop number every
+Last updated: **2026-09-06, loop 18** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 43 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 45 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **850 passing**, 49 suites                                       |
+| Tests             | **867 passing**, 51 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -222,18 +222,37 @@ is buildable tonight, and it is the part that must exist **before** any screen s
 
 **Pick up here:**
 
-1. **Call `track()` from the flows that already exist.** The wall is built and nothing is behind
-   it. Every declared event maps to a real flow: onboarding steps, sign-in, the log sheet, each
-   log type, timeline search and filter, insights, pattern detail. `insights_viewed` takes
-   `{ state: 'empty' | 'populated' }`, which `useInsights` already knows.
-   Keep the calls at the **edges** — a screen, or a mutation's `onSuccess`. Never inside domain
-   code, which stays pure and testable without a sink. Nothing needs a provider for this to be
-   correct: `track` validates and returns `'no_sink'`.
-2. **Local account-deletion wipe.** The server cascade needs the database, but "signing out clears
+**Also done in loop 18:**
+
+- `features/logs/logAnalytics.ts` + 14 tests — **every log write is now counted.** Saves,
+  corrections and deletions across all five log types, plus both sign-in paths and sign-out.
+  `LOG_COMPLETED_EVENTS` is a `Record<LogEntryKind, …>` and `log_deleted` reads `LOG_ENTRY_KINDS`,
+  so a sixth log type stops compiling rather than going quietly uncounted.
+  Calls live in each mutation's `onSuccess` — react-query guarantees a failed write is never
+  counted, which is why there is no success flag to get wrong. Email sign-in reports on
+  **verification**, not on sending the code, so abandoned attempts do not inflate the funnel.
+  Sign-out sends its event **before** clearing the sink.
+- `services/analytics/__tests__/callSites.test.ts` — forbids `track` anywhere in `src/domain`
+  (that code holds severities and meal items in local variables, and must stay pure to be
+  reproducible), and asserts no second analytics dependency exists anywhere. **Verified by
+  planting a `track()` call in `src/domain` and watching it fail.**
+
+**Still uncalled**, and the smallest next slice: `app_opened`, `onboarding_*`,
+`log_sheet_opened`/`_dismissed`, `timeline_searched`/`_filtered`, `insights_viewed`,
+`pattern_detail_opened`, `pattern_calculation_expanded`, `sync_failed`. These are all
+**screen-level** events rather than mutations, so each needs a decision about where it fires
+(mount? focus? every re-render?) — `useFocusEffect` with a ref guard is usually right, and firing
+on every render is the classic way these become useless. `log_sheet_opened` needs an `entryPoint`
+the sheet does not currently receive; pass it as a route param from the caller rather than
+guessing inside the sheet.
+
+**Pick up here:**
+
+1. **Local account-deletion wipe.** The server cascade needs the database, but "signing out clears
    every local table and the outbox" is pure, testable, and where a leak would actually show up on
    a shared device. **Read `services/auth/authService.ts` first** — check what sign-out already
    does before assuming this is missing.
-3. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
+2. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
    M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
    report may contain — behind the same sink shape as analytics, and test it against §30's list.
    The SDK slots in behind it when the owner supplies a DSN.
@@ -329,6 +348,7 @@ Append one line per loop. Keep it short and factual.
 | 15   | `gutMap` + **Gut Map section** (§52) — every factor examined, including the ones that came to nothing.  | 734 tests, verify green, bundle builds |
 | 16   | `trends` + `TrendChart` (§49) — bars not lines, gaps left empty. **Milestone 9 complete.**              | 759 tests, verify green, bundle builds |
 | 17   | M16 started: the analytics allowlist (§29/T5) and a secret scan, both built before anything needs them. | 850 tests, verify green, bundle builds |
+| 18   | Every log write, edit, deletion and sign-in now reports. `track` forbidden in `src/domain`, by test.    | 867 tests, verify green, bundle builds |
 
 ---
 
