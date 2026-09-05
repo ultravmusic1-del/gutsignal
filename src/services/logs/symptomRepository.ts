@@ -120,3 +120,11 @@ export async function applyServerRows(
 ): Promise<{ applied: number; skipped: number }> {
   return repository.applyServerRows(db, rows, pendingRecordIds);
 }
+
+/** Loads the rows a timeline page asked for, in one query. */
+export async function listSymptomLogsByIds(
+  db: SqlDatabase,
+  ids: string[]
+): Promise<SymptomLogWithSync[]> {
+  return repository.listByIds(db, ids);
+}

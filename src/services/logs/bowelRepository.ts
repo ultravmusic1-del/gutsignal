@@ -115,3 +115,20 @@ export async function applyServerRows(
 ): Promise<{ applied: number; skipped: number }> {
   return repository.applyServerRows(db, rows, pendingRecordIds);
 }
+
+/** Loads the rows a timeline page asked for, in one query. */
+export async function listBowelLogsByIds(
+  db: SqlDatabase,
+  ids: string[]
+): Promise<BowelLogWithSync[]> {
+  return repository.listByIds(db, ids);
+}
+
+/** Edits an existing entry. Same atomic guarantee as creating one. */
+export async function updateBowelLog(
+  db: SqlDatabase,
+  input: { id: string; draft: BowelDraft; timeZone: string },
+  deps: LogDeps
+): Promise<BowelLog | null> {
+  return repository.update(db, input, deps);
+}

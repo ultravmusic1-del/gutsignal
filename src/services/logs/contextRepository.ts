@@ -105,3 +105,20 @@ export async function applyServerRows(
 ): Promise<{ applied: number; skipped: number }> {
   return repository.applyServerRows(db, rows, pendingRecordIds);
 }
+
+/** Loads the rows a timeline page asked for, in one query. */
+export async function listContextLogsByIds(
+  db: SqlDatabase,
+  ids: string[]
+): Promise<ContextLogWithSync[]> {
+  return repository.listByIds(db, ids);
+}
+
+/** Edits an existing entry. Same atomic guarantee as creating one. */
+export async function updateContextLog(
+  db: SqlDatabase,
+  input: { id: string; draft: ContextDraft; timeZone: string },
+  deps: LogDeps
+): Promise<ContextLog | null> {
+  return repository.update(db, input, deps);
+}

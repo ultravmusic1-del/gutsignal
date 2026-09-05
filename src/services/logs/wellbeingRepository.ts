@@ -93,3 +93,20 @@ export async function applyServerRows(
 ): Promise<{ applied: number; skipped: number }> {
   return repository.applyServerRows(db, rows, pendingRecordIds);
 }
+
+/** Loads the rows a timeline page asked for, in one query. */
+export async function listWellbeingLogsByIds(
+  db: SqlDatabase,
+  ids: string[]
+): Promise<WellbeingLogWithSync[]> {
+  return repository.listByIds(db, ids);
+}
+
+/** Edits an existing entry. Same atomic guarantee as creating one. */
+export async function updateWellbeingLog(
+  db: SqlDatabase,
+  input: { id: string; draft: WellbeingDraft; timeZone: string },
+  deps: LogDeps
+): Promise<WellbeingLog | null> {
+  return repository.update(db, input, deps);
+}

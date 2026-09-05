@@ -9,7 +9,7 @@
  * path is exercised against a real SQL engine in tests.
  */
 
-import type { Meal, MealDraft, MealItem, MealSize, MealTag } from '@/domain/logs/meal';
+import type { Meal, MealDraft, MealSize, MealTag } from '@/domain/logs/meal';
 import type { LogSource } from '@/domain/logs/source';
 import { buildOccurrence } from '@/domain/time/occurrence';
 import type { SqlDatabase } from '@/services/db/sqlite';
@@ -252,6 +252,59 @@ export async function createMeal(
 }
 
 /**
+ * Edits a meal, replacing its contents.
+ *
+ * Items are rebuilt from the draft rather than diffed against the existing rows, matching how
+ * both the local write and the server function already replace contents wholesale. That gives
+ * an edited item a new id; nothing references item ids across meals, and `canonical_factor_id`
+ * is derived by normalisation at M8 rather than authored, so it is recomputed rather than lost.
+ *
+ * `createdAt` is preserved: the user is correcting a record of something that happened, not
+ * recording it again. Repeat exists for the latter.
+ */
+export async function updateMeal(
+  db: SqlDatabase,
+  { id, draft, timeZone }: { id: string; draft: MealDraft; timeZone: string },
+  deps: Deps
+): Promise<Meal | null> {
+  const existing = await getMeal(db, id);
+  if (existing === null) return null;
+
+  const updated: Meal = {
+    ...existing,
+    title: draft.title,
+    mealSize: draft.mealSize,
+    note: draft.note ?? null,
+    ...buildOccurrence(draft.occurredAt, timeZone),
+    updatedAt: deps.now.toISOString(),
+    items: draft.items.map((rawName, position) => ({
+      id: deps.generateId(),
+      mealId: id,
+      userId: existing.userId,
+      rawName,
+      canonicalFactorId: null,
+      confidence: null,
+      userConfirmed: true,
+      position,
+    })),
+    tags: draft.tags,
+  };
+
+  const row = toRow(updated);
+
+  await db.withTransactionAsync(async () => {
+    await writeAggregate(db, row);
+    await enqueue(
+      db,
+      { tableName: MEAL_LOGS_TABLE, recordId: id, operation: 'update', payload: row },
+      deps
+    );
+  });
+
+  return updated;
+}
+
+/**
  * Records the same meal again at a new time (spec §40).
  *
  * A genuinely new meal with new ids, not a reference to the old one: the user ate twice, and
@@ -407,6 +460,14 @@ export async function listRecentMeals(
      LIMIT ?`,
     [userId, limit]
   );
+}
+
+/** Loads the meals a timeline page asked for, children included, in three queries. */
+export async function listMealsByIds(db: SqlDatabase, ids: string[]): Promise<MealWithSync[]> {
+  if (ids.length === 0) return [];
+
+  const placeholders = ids.map(() => '?').join(', ');
+  return listMeals(db, `WHERE m.id IN (${placeholders})`, ids);
 }
 
 /**

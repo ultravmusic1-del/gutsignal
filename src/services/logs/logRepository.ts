@@ -259,6 +259,19 @@ export function createLogRepository<TLog, TRow extends BaseLogRow, TDraft extend
       );
     },
 
+    /**
+     * Loads exactly the rows a timeline page asked for.
+     *
+     * The timeline decides *which* entries appear by querying across every log table at once;
+     * this fills in the detail for one type in a single query, never one query per row.
+     */
+    async listByIds(db: SqlDatabase, ids: string[]): Promise<WithSync<TLog>[]> {
+      if (ids.length === 0) return [];
+
+      const placeholders = ids.map(() => '?').join(', ');
+      return list(db, `WHERE l.id IN (${placeholders})`, ids);
+    },
+
     /** Most recent logs, newest first. */
     async listRecent(
       db: SqlDatabase,
