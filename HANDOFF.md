@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 9** · Update the date and loop number every
+Last updated: **2026-09-06, loop 10** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                        |
 | ----------------- | ---------------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 26 commits ahead of `main`, pushed                |
+| Current branch    | `feat/m6-timeline` — 28 commits ahead of `main`, pushed                |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**             |
-| Tests             | **555 passing**, 34 suites                                             |
+| Tests             | **599 passing**, 35 suites                                             |
 | `npx expo-doctor` | **21/21**                                                              |
 | iOS bundle        | builds (`npx expo export --platform ios`)                              |
 | Live database     | 11 tables, RLS enabled and verified on all 11, security advisors clean |
@@ -113,40 +113,31 @@ actually establish (logic, data, tests) over UI polish you cannot verify.
   `scenarios.ts` holds the fixtures, each with a `why` that travels into the test name.
   They caught a real flaw: `poor_sleep`/`good_sleep` were confounding each other, so
   `factors.ts` now exposes `measurementOf()` and confounders skip the same measurement.
+- `docs/PATTERN_ENGINE.md` + 44 tests — every threshold, why it was chosen, and the honest
+  limitations in §14. A test parses the doc and pins 21 thresholds and 4 window bounds against
+  the exported constants, so the doc cannot drift from the code.
 
-**Pick up here, in this order:**
+**Milestone 8 is complete.** Engine, controls, fixtures and documentation all done.
 
-1. `docs/PATTERN_ENGINE.md` — required by `CLAUDE.md` §21. Document every threshold and why.
+**Next: Milestone 9 — Insights.** M8 is done; nothing in the engine is outstanding except the
+open items recorded in `docs/PATTERN_ENGINE.md` §14, which are deliberate.
 
-Persisting findings to a `pattern_findings` table (§62) comes after the engine computes them.
-Migrations are permitted; see §2.
+Read spec §49–§52 first. Suggested order:
 
-This is the product's core intellectual property and the right thing to build unattended: it is
-pure computation, heavily testable, and needs nothing from the owner.
+1. **Persist findings** — `pattern_findings` (spec §62, §86). A migration plus RLS plus coverage
+   in `rls_isolation.sql`. Findings currently exist only in memory, so nothing can be compared
+   over time or shown without recomputing. Migrations are permitted; see §2.
+2. **A hook to run the engine** — read logs from SQLite for a range, call `analyse()`, cache with
+   TanStack Query. The engine is pure and takes a `LogSet`; nothing wires it to the database yet.
+3. **The Insights screen** (spec §49) — "What stands out", "Worth investigating", and an honest
+   empty state for a diary with nothing to say yet. Most users will see the empty state for
+   weeks, so it deserves as much care as the populated one.
+4. **Pattern detail** (spec §51) — every insight links to its evidence and its calculation. The
+   `Finding` type already carries everything needed: counts, interval, consistency, confounders,
+   limitations.
 
-**Milestone 7 (AI-assisted logging) is blocked** — it needs an AI provider account the owner has
-not created. Skip it. M8 does not depend on it.
-
-Required reading before you start: `CLAUDE.md` §§18–21 and §42, and
-`docs/MASTER_BUILD_SPEC.md` §§53–62.
-
-The rules that matter most, in short:
-
-- **Deterministic only.** Structured logs → deterministic analytics → structured finding →
-  _optionally_ an LLM explanation. An LLM may never produce a finding. Never.
-- **Associations, never causes.** No output may say a food caused anything, and nothing may
-  diagnose a condition. There is already a test scanning all source for causal and diagnostic
-  phrasing — keep it passing.
-- **Absence of a symptom log is not a good day.** Only an explicit `wellbeing_logs` entry is a
-  control observation. Never infer one from missing data.
-- **Small samples say "not enough data yet."** Never show a confident finding from a handful of
-  observations.
-- **Confounding reduces confidence.** If coffee and short sleep co-occur, neither gets full credit.
-- **Every finding must be reproducible** — store engine version, date range, factor, outcome,
-  metrics, confidence, confounders, generated timestamp.
-- **§42 requires fifteen named test fixtures.** Build them. They are the acceptance criterion.
-
-`docs/PATTERN_ENGINE.md` does not exist yet and `CLAUDE.md` §21 requires it. Write it as you go.
+Use `PATTERN_STATUS_COPY` from `src/domain/patterns/status.ts` for all status language. Never
+write new copy describing a finding without checking it against `CLAUDE.md` §17.
 
 ### After that, in order
 
@@ -205,6 +196,7 @@ Append one line per loop. Keep it short and factual.
 | 7    | `engine.ts` + 16 tests — `analyse()` joins the whole pass; deterministic end to end.                    | 498 tests, verify green                |
 | 8    | `multiple-testing.ts` + 19 tests — breadth shrinkage, wired into `analyse()`.                           | 517 tests, verify green                |
 | 9    | `fixtures/` + 38 tests — all 15 §42 scenarios. Caught and fixed same-measurement confounding.           | 555 tests, verify green                |
+| 10   | `docs/PATTERN_ENGINE.md` + 44 tests pinning it to the code. **Milestone 8 complete.**                   | 599 tests, verify green                |
 
 ---
 
