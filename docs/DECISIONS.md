@@ -955,3 +955,40 @@ build path, so no shipping artefact depends on the blocked binary.
 Smart App Control is a system security setting and disabling it is irreversible without
 reinstalling Windows, so it is left alone. Use `--no-bytecode` for local export checks; the block
 is expected to lapse on its own as the binary acquires reputation.
+
+---
+
+## ADR-0039 — Two moderate advisories are accepted rather than downgrading the SDK
+
+**Status:** Accepted · **Date:** 2026-09-06
+
+**Context.** The Milestone 16 dependency audit reports 14 moderate vulnerabilities, 0 high and 0
+critical, resolving to two root advisories:
+
+- `decode-uri-component@0.2.2` (GHSA-vcc3-ghjq-m6fr), reached through
+  `expo-router → query-string`. A denial of service on malformed percent-encoded input. This is a
+  **runtime** path: `app.config.ts` registers a `gutsignal://` scheme, so Expo Router parses
+  incoming URLs, and a crafted deep link could burn CPU. There is no data-exposure component.
+- `uuid@7.0.3` (GHSA-w5hq-g745-h8pq), reached through
+  `expo-splash-screen → @expo/config-plugins → xcode`. Missing bounds check when a `buf` argument
+  is supplied. This is **build time only**, on the machine running prebuild, and `xcode` does not
+  pass `buf`. It is not in the shipped bundle.
+
+**Alternatives considered.** (a) `npm audit fix --force`, which offers **downgrades** rather than
+upgrades — `expo-router` 57.0.19 → 5.1.11 and `expo-splash-screen` 57.0.8 → 55.0.25, both
+semver-major — and would break the SDK 57 install that `npx expo install --check` currently
+reports as correct. (b) A `package.json` override pinning newer transitive versions, which is the
+version-forcing `CLAUDE.md` §39 tells us not to do when Expo manages compatibility, and which
+would leave the lockfile disagreeing with the SDK's own version map. (c) Removing `expo-router`
+or `expo-splash-screen`, which is not a serious option.
+
+**Reason.** Neither advisory is fixable within SDK 57's dependency tree; both need Expo to bump
+upstream. The cost of every available fix is a broken SDK install, and the benefit is closing two
+moderate issues — one build-time and unreachable in the shipped app, one a self-inflicted CPU burn
+requiring the user to open a hostile link. That trade does not favour the fix.
+
+**Consequences.** The audit result is documented in `docs/PRIVACY_SECURITY.md` §6 with the
+reasoning and the exact paths, so the next person does not have to redo the analysis. It is
+re-checked on every Expo SDK upgrade. **A high or critical finding is a release blocker under
+`CLAUDE.md` §58 and must not be accepted this way** — this ADR covers moderate findings with a
+documented absence of data exposure, and nothing broader.
