@@ -1,10 +1,12 @@
 import { Redirect } from 'expo-router';
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Alert, DevSettings, View } from 'react-native';
 
 import { useAppBoot, type BootFailureKind } from '@/boot/useAppBoot';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useProfile } from '@/features/profile/useProfile';
-import { Card, Screen, Text } from '@/components/ui';
+import { Button, Card, Screen, Text } from '@/components/ui';
+import { deleteLocalDatabase } from '@/services/db/database';
 import { useTheme } from '@/theme';
 
 /**
@@ -109,7 +111,64 @@ function BootFailure({ problems, kind }: { problems: string[]; kind: BootFailure
             {copy.footer}
           </Text>
         </Card>
+
+        {__DEV__ && kind === 'storage' ? <ResetLocalStorage /> : null}
       </View>
     </Screen>
+  );
+}
+
+/**
+ * A way out of a local database that cannot be migrated. **Development builds only.**
+ *
+ * A half-applied schema is not something restarting fixes: the version table says migration 2 ran
+ * while the tables it creates are absent, so every launch fails the same way. Before this existed
+ * the only remedy was deleting Expo Go to clear its sandbox, which is an absurd thing to ask of
+ * someone testing a build.
+ *
+ * It is `__DEV__`-gated rather than shipped. Deleting a diary is not a remedy to put in front of a
+ * real user — for them, unsynced entries are the thing most worth protecting (CLAUDE.md §15), and
+ * a recoverable schema fault should be handled by the migrator, not by a button. If a shipped
+ * build ever needs this, it needs an export first.
+ *
+ * The confirmation is not decoration. This deletes local logs, and the copy says so plainly rather
+ * than calling it a reset (§57: no fake or euphemistic destructive actions).
+ */
+function ResetLocalStorage() {
+  const theme = useTheme();
+  const [working, setWorking] = useState(false);
+
+  const confirm = () => {
+    Alert.alert(
+      'Delete local data?',
+      'This deletes every log stored on this device, including any not yet synced. It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setWorking(true);
+            void deleteLocalDatabase()
+              .then(() => DevSettings.reload())
+              .catch(() => setWorking(false));
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <View style={{ gap: theme.spacing.xs }}>
+      <Button
+        label="Delete local data and restart"
+        variant="secondary"
+        loading={working}
+        onPress={confirm}
+      />
+      <Text variant="caption" color="tertiary">
+        Development builds only. Deletes every log stored on this device.
+      </Text>
+    </View>
   );
 }
