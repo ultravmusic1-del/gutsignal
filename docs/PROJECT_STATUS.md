@@ -87,8 +87,8 @@ No accounts, hardware or decisions needed. Ordered by value.
 the gate works on a fork's pull request exactly as on a branch.
 
 > **Validated on Actions.** It took four runs, and each failure was the gate earning its place:
-> cannot execute a multi-statement file (now psql with ); a
-> swept unformatted work into an unrelated commit; and starting eleven containers to
+> `supabase db query` cannot execute a multi-statement file (now psql with `ON_ERROR_STOP`); a
+> `git add -A` swept unformatted work into an unrelated commit; and starting eleven containers to
 > run one SQL file flaked on a port bind (now database-only). None of those would have been found
 > by reading.
 
