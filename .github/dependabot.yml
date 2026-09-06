@@ -30,6 +30,18 @@ updates:
       - dependency-name: 'eslint-config-expo'
       # Reanimated and worklets are pinned exactly by the SDK and break loudly out of step.
       - dependency-name: 'react-native-worklets'
+      # These two are not Expo's, but Expo's packages are built against them: `eslint-config-expo`
+      # follows eslint's major line and `jest-expo` follows jest's. A major bump here breaks a
+      # pinned package that cannot follow, so majors are suppressed and minors still flow. The
+      # first run of this config proposed eslint 9 → 10, which is exactly that.
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'jest'
+        update-types: ['version-update:semver-major']
+      # `expo/tsconfig.base` and the Expo ESLint plugins are built against a TypeScript major.
+      # The first run proposed 6 → 7, which nothing else in the toolchain is ready for.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: '/'

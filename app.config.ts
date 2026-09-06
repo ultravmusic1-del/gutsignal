@@ -51,6 +51,10 @@ const config: ExpoConfig = {
     'expo-apple-authentication',
     'expo-secure-store',
     'expo-sqlite',
+    // Diary export hands a file to the iOS share sheet (spec §98). The plugin is what makes the
+    // native share capability available; without it `Sharing.isAvailableAsync()` answers false on
+    // a real build while everything still works in Metro.
+    'expo-sharing',
   ],
 
   experiments: {
