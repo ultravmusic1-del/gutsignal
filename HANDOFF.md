@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 22** · Update the date and loop number every
+Last updated: **2026-09-06, loop 23** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 53 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 55 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **937 passing**, 56 suites                                       |
+| Tests             | **955 passing**, 58 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -257,27 +257,18 @@ been buildable is the part that has to exist **before** anything depends on it.
 
 **Pick up here:**
 
-1. **The last four analytics events.** The reporting machinery is all built:
-   `features/analytics/useScreenView.ts` reports **once per focus** and **waits** for properties
-   not known at focus time (`null` means "not yet"), and `services/sync/failureReason.ts`
-   classifies a failure into the four words `sync_failed` accepts.
-   **Already wired:** `app_opened` (after the database opens, not on mount — an app whose storage
-   will not open did not launch), `insights_viewed`, `pattern_detail_opened`,
-   `pattern_calculation_expanded`, `sync_failed`, and the whole onboarding funnel.
-   **Still uncalled:** `log_sheet_opened` / `log_sheet_dismissed` and `timeline_searched` /
-   `timeline_filtered`.
-   `log_sheet_opened` takes an `entryPoint` the sheet does not receive — pass it as a route param
-   from the caller (the floating + button and Today both open it) rather than guessing inside the
-   sheet. `log_sheet_dismissed` is the harder half: a native form sheet can be dragged away
-   without any code of ours running, so find the dismissal callback rather than inferring it from
-   a blur, and if there is no honest signal, leave the event uncalled and say so.
-   `timeline_searched` should fire on a **debounced settled query**, never per keystroke; it is
-   property-free, so call `track` directly rather than `useScreenView`.
-2. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
+**The analytics work of M16 is finished.** Every event in `events.ts` has a caller except
+`account_deleted`, which waits on a deletion flow that does not exist — and that is enforced, not
+remembered: `callSites.test.ts` fails on any declared event with no call site unless it is listed
+with a written reason, and fails again if a reason outlives its event.
+
+**Pick up here:**
+
+1. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
    M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
    report may contain — behind the same sink shape as analytics, and test it against §30's list.
    The SDK slots in behind it when the owner supplies a DSN.
-3. **Account deletion (spec §97, a §58 blocker).** `deleteLocalDatabase()` already exists in
+2. **Account deletion (spec §97, a §58 blocker).** `deleteLocalDatabase()` already exists in
    `services/db/database.ts` and nothing calls it; `wipeLocalDataExcept(db, null)` clears
    everything without touching the file. The **server** cascade needs the paused database, so the
    local half and the confirmation flow can be built now and the Edge Function added later — but
@@ -389,6 +380,7 @@ Append one line per loop. Keep it short and factual.
 | 20   | Sign-out flushes, counts and warns before discarding anything unsent (§15). §4 tidied of loop drift.    | 899 tests, verify green, bundle builds |
 | 21   | `useScreenView` — once per focus, waits for its data. Wired to 4 events. Lint now 0 errors, 0 warnings. | 906 tests, verify green, bundle builds |
 | 22   | `sync_failed` classified into four safe words, never a message; onboarding funnel from one frame.       | 937 tests, verify green, bundle builds |
+| 23   | The last four events: log sheet open/dismiss and timeline search/filter. Every event now has a caller.  | 955 tests, verify green, bundle builds |
 
 ---
 
@@ -483,6 +475,17 @@ One consequence worth knowing: sign-out now waits on the network before showing 
 so on a bad connection the button spins for as long as a sync attempt takes. It is the only place
 in the app that waits on the network at all, and it does so because it is the last moment the
 person whose entries these are is still present.
+
+#### 🟡 log_sheet_dismissed is reasoned, not observed
+
+It fires when the sheet unmounts without the user having picked anything — which is right _if_
+React Navigation unmounts a form sheet when it is dragged away. It does, as far as the router is
+concerned, because the route has to pop for the navigation state to stay in sync. But that is
+reasoning about a native gesture nobody has performed, on a build nobody has run.
+
+The tests pin the logic (a choice suppresses the dismissal; an unmount without one reports it),
+and they cannot pin the premise. **Worth thirty seconds on the first device build:** open the +
+sheet, drag it away, and check one dismissal was reported rather than none or two.
 
 #### 🟡 One onboarding judgement call, easy to reverse
 
