@@ -275,6 +275,48 @@ export const MIGRATIONS: Migration[] = [
         ON context_logs (user_id, occurred_local_date, context_type);
     `,
   },
+  {
+    version: 6,
+    name: 'notification_preferences',
+    sql: `
+      -- When GutSignal may interrupt someone (spec §74-75).
+      --
+      -- Local only, and deliberately not in the outbox. A reminder is scheduled with this
+      -- device's OS against this device's clock, so it is a property of the phone rather than of
+      -- the account: syncing it would mean a tablet silently rescheduling a phone. It is also the
+      -- one table here that holds no health information at all.
+      --
+      -- Times are stored as separate hour and minute integers rather than as 'HH:MM'. They are
+      -- wall-clock values that go straight to the OS scheduler as numbers, and a text column
+      -- would only add a parse step that can fail.
+      CREATE TABLE IF NOT EXISTS notification_preferences (
+        user_id                 TEXT    PRIMARY KEY,
+
+        morning_check_in        INTEGER NOT NULL CHECK (morning_check_in IN (0, 1)),
+        evening_check_in        INTEGER NOT NULL CHECK (evening_check_in IN (0, 1)),
+        weekly_review           INTEGER NOT NULL CHECK (weekly_review IN (0, 1)),
+
+        morning_hour            INTEGER NOT NULL CHECK (morning_hour BETWEEN 0 AND 23),
+        morning_minute          INTEGER NOT NULL CHECK (morning_minute BETWEEN 0 AND 59),
+        evening_hour            INTEGER NOT NULL CHECK (evening_hour BETWEEN 0 AND 23),
+        evening_minute          INTEGER NOT NULL CHECK (evening_minute BETWEEN 0 AND 59),
+
+        -- 1 = Sunday, matching expo-notifications' numbering rather than JavaScript's.
+        weekly_weekday          INTEGER NOT NULL CHECK (weekly_weekday BETWEEN 1 AND 7),
+        weekly_hour             INTEGER NOT NULL CHECK (weekly_hour BETWEEN 0 AND 23),
+        weekly_minute           INTEGER NOT NULL CHECK (weekly_minute BETWEEN 0 AND 59),
+
+        quiet_hours_enabled     INTEGER NOT NULL CHECK (quiet_hours_enabled IN (0, 1)),
+        quiet_from_hour         INTEGER NOT NULL CHECK (quiet_from_hour BETWEEN 0 AND 23),
+        quiet_from_minute       INTEGER NOT NULL CHECK (quiet_from_minute BETWEEN 0 AND 59),
+        quiet_until_hour        INTEGER NOT NULL CHECK (quiet_until_hour BETWEEN 0 AND 23),
+        quiet_until_minute      INTEGER NOT NULL CHECK (quiet_until_minute BETWEEN 0 AND 59),
+
+        created_at              TEXT    NOT NULL,
+        updated_at              TEXT    NOT NULL
+      );
+    `,
+  },
 ];
 
 /** Migrations that still need to run, in order. Pure — the unit under test. */

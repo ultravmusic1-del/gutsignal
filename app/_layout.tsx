@@ -7,6 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ReminderSync } from '@/features/notifications/ReminderSync';
+import { configureNotificationHandler } from '@/services/notifications/expoNotificationProvider';
 import { captureError } from '@/services/monitoring/monitoring';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { SyncProvider } from '@/features/sync/SyncProvider';
@@ -14,6 +16,10 @@ import { createQueryClient } from '@/services/query/client';
 import { ThemeProvider } from '@/theme';
 
 void SplashScreen.preventAutoHideAsync();
+
+// How a reminder looks if it arrives while the app is open. Set once, at module scope, because
+// expo-notifications reads it when a notification is delivered rather than when it is scheduled.
+configureNotificationHandler();
 
 export default function RootLayout() {
   const [queryClient] = useState(() => createQueryClient());
@@ -36,6 +42,10 @@ export default function RootLayout() {
                 {/* Inside AuthProvider: the engine's lifetime follows the session, starting
                     when one appears and stopping on sign-out. */}
                 <SyncProvider>
+                  {/* Renders nothing. Reconciles the OS notification schedule on launch and on
+                      every foreground, because permission can change in iOS Settings while the
+                      app is not running. */}
+                  <ReminderSync />
                   <StatusBar style="auto" />
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="index" />
@@ -140,6 +150,14 @@ export default function RootLayout() {
                       options={{
                         headerShown: true,
                         headerTitle: 'Diagnostics',
+                        headerBackTitle: 'You',
+                      }}
+                    />
+                    <Stack.Screen
+                      name="notifications"
+                      options={{
+                        headerShown: true,
+                        headerTitle: 'Reminders',
                         headerBackTitle: 'You',
                       }}
                     />

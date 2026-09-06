@@ -127,6 +127,22 @@ export default function YouScreen() {
         </Card>
 
         <Card elevation="flat">
+          <Text variant="cardTitle">Reminders</Text>
+          <View style={{ height: theme.spacing.xs }} />
+          <Text variant="body" color="secondary">
+            Choose when GutSignal nudges you to log, and when it stays quiet.
+          </Text>
+          <View style={{ height: theme.spacing.md }} />
+          <Button
+            label="Reminders"
+            variant="secondary"
+            size="medium"
+            haptic={false}
+            onPress={() => router.push('/notifications')}
+          />
+        </Card>
+
+        <Card elevation="flat">
           {/* Tapping the version several times opens diagnostics (review §23). Hidden rather than
               listed because it is for a support conversation, not for browsing — and a visible row
               of build identifiers on the settings screen is noise to everyone who will never need

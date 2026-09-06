@@ -7,4 +7,5 @@ export { Icon, type IconName, type IconProps } from './Icon';
 export { Screen, type ScreenProps } from './Screen';
 export { SelectCard, type SelectCardProps } from './SelectCard';
 export { Text, type TextProps } from './Text';
+export { ToggleRow, type ToggleRowProps } from './ToggleRow';
 export { TextField, type TextFieldProps } from './TextField';
