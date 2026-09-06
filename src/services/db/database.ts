@@ -47,14 +47,27 @@ export function openDatabase(): Promise<SQLite.SQLiteDatabase> {
   opening = (async () => {
     const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
 
-    // WAL keeps reads responsive while the sync engine writes. Foreign keys are off by default
-    // in SQLite and must be enabled per connection.
-    await db.execAsync('PRAGMA journal_mode = WAL;');
-    await db.execAsync('PRAGMA foreign_keys = ON;');
+    try {
+      // WAL keeps reads responsive while the sync engine writes. Foreign keys are off by default
+      // in SQLite and must be enabled per connection.
+      await db.execAsync('PRAGMA journal_mode = WAL;');
+      await db.execAsync('PRAGMA foreign_keys = ON;');
 
-    await migrate(db);
+      await migrate(db);
 
-    return db;
+      return db;
+    } catch (error) {
+      // The connection opened; it was the migration that failed. Nothing outside this function has
+      // a reference to it, so without this the handle leaks — and `expo-sqlite` keeps it in its
+      // native cache, where it refuses to delete a database that is still open:
+      //
+      //   Unable to delete database … that is currently open. Close it prior to deletion
+      //
+      // Which makes the one recovery a user has for an unopenable database fail. That is exactly
+      // how it failed: the boot screen's delete button did nothing at all.
+      await db.closeAsync().catch(() => undefined);
+      throw error;
+    }
   })();
 
   opening.catch(() => {

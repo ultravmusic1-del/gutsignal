@@ -36,8 +36,12 @@ import type { SqlBindValue } from '../sqlite';
  */
 function mockCreateConnection() {
   const db = new DatabaseSync(':memory:');
+  let open = true;
 
   const connection = {
+    /** Whether the native side still holds this connection. See `deleteDatabaseAsync` below. */
+    isOpen: () => open,
+
     async execAsync(source: string): Promise<void> {
       db.exec(source);
     },
@@ -67,6 +71,7 @@ function mockCreateConnection() {
     },
 
     async closeAsync(): Promise<void> {
+      open = false;
       db.close();
     },
   };
@@ -87,6 +92,9 @@ let mockOpens = 0;
 /** Set by the retry test. A namespace import is copied, so the failure has to come from inside. */
 let mockOpenFailure: Error | null = null;
 
+/** Seeds a newly created connection, for tests that need the database to start out damaged. */
+let mockOnOpen: ((connection: ReturnType<typeof mockCreateConnection>) => void) | null = null;
+
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: async (name: string) => {
     mockOpens += 1;
@@ -96,16 +104,34 @@ jest.mock('expo-sqlite', () => ({
     if (existing) return existing;
 
     const created = mockCreateConnection();
+    mockOnOpen?.(created);
     mockConnections.set(name, created);
     return created;
   },
+  /**
+   * Refuses to delete a database that is still open, exactly as the native module does:
+   *
+   * ```text
+   * Unable to delete database … that is currently open. Close it prior to deletion
+   * ```
+   *
+   * (expo-sqlite/ios/SQLiteModule.swift:510 and Exceptions.swift:29.) Without this rule the fake
+   * would happily delete anything, and the leak below would be invisible here while breaking the
+   * only recovery a user has on a device.
+   */
   deleteDatabaseAsync: async (name: string) => {
+    const existing = mockConnections.get(name);
+
+    if (existing?.isOpen() === true) {
+      throw new Error(`Unable to delete database ${name} that is currently open`);
+    }
+
     mockConnections.delete(name);
   },
 }));
 
 // Imported after the mock is registered.
-const { openDatabase, closeDatabase, getSchemaVersion, DATABASE_NAME } =
+const { openDatabase, closeDatabase, deleteLocalDatabase, getSchemaVersion, DATABASE_NAME } =
   jest.requireActual<typeof import('../database')>('../database');
 
 afterEach(async () => {
@@ -113,6 +139,7 @@ afterEach(async () => {
   mockConnections.delete(DATABASE_NAME);
   mockOpens = 0;
   mockOpenFailure = null;
+  mockOnOpen = null;
 });
 
 describe('openDatabase', () => {
@@ -152,5 +179,29 @@ describe('openDatabase', () => {
     mockOpenFailure = null;
 
     await expect(openDatabase()).resolves.toBeDefined();
+  });
+
+  /**
+   * A migration that fails must not leave the connection behind.
+   *
+   * `openDatabaseAsync` succeeds and `migrate` throws, so the handle exists but nobody holds a
+   * reference to it — and `expo-sqlite` keeps it in its native cache, where it refuses to delete a
+   * database that is still open. That turns a recoverable schema fault into an unrecoverable one:
+   * the app cannot open the database, and the boot screen's delete button cannot remove it either.
+   * On a device this looked like a button that did nothing at all.
+   */
+  it('closes the connection when the migration fails, so the database can still be deleted', async () => {
+    // A version row claiming a migration ran, with none of its tables present. This is the state
+    // the interleaved-transaction bug left behind, and it is what the phone actually contained.
+    mockOnOpen = (connection) => {
+      connection.execAsync(`
+        CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT);
+        INSERT INTO schema_migrations VALUES (2, 'symptom_logs', '2026-09-06T00:00:00.000Z');
+      `);
+    };
+
+    await expect(openDatabase()).rejects.toThrow();
+
+    await expect(deleteLocalDatabase()).resolves.toBeUndefined();
   });
 });

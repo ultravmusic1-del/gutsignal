@@ -118,6 +118,33 @@ describe('the boot failure screen', () => {
   });
 
   /**
+   * A delete that fails has to say so.
+   *
+   * The first version caught the error and discarded it, which made a real failure — expo-sqlite
+   * refusing to delete a database whose connection was still open — look identical to a button
+   * that did nothing. That is how it was reported from a phone, and it cost a round trip to find.
+   */
+  it('shows why a delete failed instead of silently doing nothing', async () => {
+    mockDeleteLocalDatabase.mockRejectedValueOnce(
+      new Error('Unable to delete database gutsignal.db that is currently open')
+    );
+
+    const alert = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation((_title, _message, buttons) =>
+        buttons?.find((button) => button.style === 'destructive')?.onPress?.()
+      );
+
+    const { getByLabelText, findByText } = await renderScreen();
+    fireEvent.press(getByLabelText('Delete local data and restart'));
+
+    await findByText(/currently open/);
+    expect(mockReload).not.toHaveBeenCalled();
+
+    alert.mockRestore();
+  });
+
+  /**
    * The one thing that must never reach a real user. `__DEV__` is a global the bundler replaces,
    * so this is the only place its effect can be checked.
    */

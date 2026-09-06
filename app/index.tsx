@@ -137,6 +137,7 @@ function BootFailure({ problems, kind }: { problems: string[]; kind: BootFailure
 function ResetLocalStorage() {
   const theme = useTheme();
   const [working, setWorking] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
   const confirm = () => {
     Alert.alert(
@@ -149,9 +150,16 @@ function ResetLocalStorage() {
           style: 'destructive',
           onPress: () => {
             setWorking(true);
+            setFailure(null);
             void deleteLocalDatabase()
               .then(() => DevSettings.reload())
-              .catch(() => setWorking(false));
+              .catch((error: unknown) => {
+                // Shown, not swallowed. The first version of this caught and discarded the error,
+                // so a delete that failed because the connection was still open was
+                // indistinguishable from a button that did nothing — which is how it was reported.
+                setWorking(false);
+                setFailure(error instanceof Error ? error.message : String(error));
+              });
           },
         },
       ]
@@ -166,9 +174,15 @@ function ResetLocalStorage() {
         loading={working}
         onPress={confirm}
       />
-      <Text variant="caption" color="tertiary">
-        Development builds only. Deletes every log stored on this device.
-      </Text>
+      {failure === null ? (
+        <Text variant="caption" color="tertiary">
+          Development builds only. Deletes every log stored on this device.
+        </Text>
+      ) : (
+        <Text variant="caption" color="secondary">
+          Could not delete: {failure}
+        </Text>
+      )}
     </View>
   );
 }
