@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 20** · Update the date and loop number every
+Last updated: **2026-09-06, loop 21** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 49 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 51 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **899 passing**, 53 suites                                       |
+| Tests             | **906 passing**, 54 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -257,15 +257,22 @@ been buildable is the part that has to exist **before** anything depends on it.
 
 **Pick up here:**
 
-1. **The screen-level analytics events, still uncalled:** `app_opened`, `onboarding_*`,
-   `log_sheet_opened`/`_dismissed`, `timeline_searched`/`_filtered`, `insights_viewed`,
-   `pattern_detail_opened`, `pattern_calculation_expanded`, `sync_failed`.
-   These are a different problem from the mutation events already wired: each needs a decision
-   about **when** it fires. `useFocusEffect` with a ref guard is usually right, and firing on every
-   render is the classic way these become useless. `insights_viewed` takes
-   `{ state: 'empty' | 'populated' }`, which `useInsights` already knows. `log_sheet_opened` needs
-   an `entryPoint` the sheet does not currently receive — pass it as a route param from the caller
-   rather than guessing inside the sheet.
+1. **The remaining screen events.** Loop 21 built `features/analytics/useScreenView.ts` + 7 tests —
+   reports **once per focus**, guarded by a ref that resets when focus is lost, and **waits** for
+   properties that are not known at focus time (`null` means "not yet"). Already wired:
+   `insights_viewed`, `pattern_detail_opened`, `pattern_calculation_expanded` (on the way open
+   only), and `app_opened`, which fires **after the database opens** rather than on mount — an app
+   whose storage will not open did not launch, and counting it would hide the failure worth
+   measuring.
+   **Still uncalled:** `onboarding_started` / `onboarding_step_completed` / `onboarding_completed`,
+   `log_sheet_opened` / `log_sheet_dismissed`, `timeline_searched` / `timeline_filtered`,
+   `sync_failed`.
+   Two need plumbing rather than a hook call: `log_sheet_opened` takes an `entryPoint` the sheet
+   does not receive — pass it as a route param from the caller rather than guessing inside the
+   sheet — and `sync_failed` takes a fixed `reason` enum, so `syncEngine` needs to classify its
+   failures rather than hand over an error message.
+   `timeline_searched` should fire on a **debounced settled query**, not per keystroke; it is
+   property-free, so use `track` directly rather than `useScreenView`.
 2. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
    M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
    report may contain — behind the same sink shape as analytics, and test it against §30's list.
@@ -323,7 +330,7 @@ Follow `CLAUDE.md` §50. Concretely, each loop:
 6. **Push the branch.** Never `main`.
 7. **Update this file** — §3, §4, §6 and §7 — so the next loop starts oriented.
 
-### Two things that will cost you time if you do not know them
+### Testing traps in this repo, all of which have already cost a loop time
 
 - **`render` must be awaited, including inside a helper.** This version of
   `@testing-library/react-native` only publishes `screen` once the render settles, so
@@ -332,6 +339,15 @@ Follow `CLAUDE.md` §50. Concretely, each loop:
   helper. Write `await render(...)` inside the helper and make the helper async.
 - **Jest's `expect()` takes one argument.** `expect(value, 'message')` is Vitest. Put the
   explanation in the test name instead; two loops have lost time to this.
+- **A press must be wrapped in act to commit.** `fireEvent.press` runs the handler, but the state
+  update it causes is never committed unless you write
+  `await act(async () => { fireEvent.press(...) })`. This does not announce itself: a test whose
+  assertion was already true before the press still passes, so it quietly makes tests meaningless
+  rather than failing. Loop 21 had two passing for exactly that reason.
+- **`fireEvent.press` does not reach a `<Text onPress>`.** Use `Pressable` with an
+  `accessibilityLabel` and `getByLabelText`, as the rest of the suite does.
+- **`rerender` overlaps act() calls**, leaving `screen` on a stale tree and breaking every later
+  test in the file. Drive state through presses on a harness component instead.
 
 ### Never do these
 
@@ -371,6 +387,7 @@ Append one line per loop. Keep it short and factual.
 | 18   | Every log write, edit, deletion and sign-in now reports. `track` forbidden in `src/domain`, by test.    | 867 tests, verify green, bundle builds |
 | 19   | Another account's local data is cleared when someone else signs in — a §58 cross-user hole, closed.     | 885 tests, verify green, bundle builds |
 | 20   | Sign-out flushes, counts and warns before discarding anything unsent (§15). §4 tidied of loop drift.    | 899 tests, verify green, bundle builds |
+| 21   | `useScreenView` — once per focus, waits for its data. Wired to 4 events. Lint now 0 errors, 0 warnings. | 906 tests, verify green, bundle builds |
 
 ---
 
