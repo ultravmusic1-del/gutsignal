@@ -98,65 +98,80 @@ variables. That is expected behaviour, not a bug.
 
 ## Commands
 
-| Command                          | Does                                               |
-| -------------------------------- | -------------------------------------------------- |
-| `npm start`                      | Metro with dev-client                              |
-| `npm run verify`                 | typecheck + lint + tests (run before every commit) |
-| `npm test`                       | Jest                                               |
-| `npm run typecheck`              | `tsc --noEmit`                                     |
-| `npm run lint`                   | ESLint                                             |
-| `npm run doctor`                 | `expo-doctor` — 21 project checks                  |
-| `npx expo export --platform ios` | full Metro bundle; catches what typecheck cannot   |
+| Command                 | Does                                                            |
+| ----------------------- | --------------------------------------------------------------- |
+| `npm start`             | Metro with dev-client                                           |
+| `npm run verify`        | alias for `verify:fast` — run before every commit               |
+| `npm run verify:fast`   | typecheck + lint + tests. The inner loop                        |
+| `npm run verify:full`   | adds format, `expo-doctor` and the iOS bundle. **What CI runs** |
+| `npm test`              | Jest                                                            |
+| `npm run test:ci`       | Jest, serial and non-interactive                                |
+| `npm run typecheck`     | `tsc --noEmit`                                                  |
+| `npm run lint`          | ESLint                                                          |
+| `npm run doctor`        | `expo-doctor` — 21 project checks                               |
+| `npm run export:ios`    | full Metro bundle; catches what typecheck cannot                |
+| `npm run report:sample` | renders a sample appointment report and opens it                |
 
-Database migrations live in `supabase/migrations/` and are applied via the Supabase MCP server
-or the CLI. RLS isolation tests: `supabase/tests/rls_isolation.sql`.
+`verify:full` runs exactly what CI runs, in the same order. If it is green locally it should be
+green on the pull request.
+
+Database migrations live in `supabase/migrations/` and are applied via the Supabase MCP server or
+the CLI. RLS isolation tests: `supabase/tests/rls_isolation.sql` — CI applies every migration from
+zero and runs that suite on every pull request.
 
 ---
 
 ## Current state
 
-**Milestones 0–4 complete. Milestones 5 and 6 built** — all five log types write offline and
-sync; the timeline pages, filters, searches, edits and deletes them. 357 tests passing, `expo-doctor`
-21/21, iOS bundle builds. On-device verification still outstanding for both.
+**[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) is the source of truth for project state.** It
+is the only file to update when state moves; this section is a summary and will otherwise drift,
+which is how this README came to claim 357 tests while `main` had 1131.
 
-| #   | Milestone              | State                                                                             |
-| --- | ---------------------- | --------------------------------------------------------------------------------- |
-| 0   | Technical audit        | Done — plan, 29 ADRs, Windows/iOS workflow                                        |
-| 1   | Foundation             | Done — theme, UI primitives, boot sequence, Supabase client, local SQLite         |
-| 2   | Design system + shells | Done — floating nav, four tabs, log sheet                                         |
-| 3   | Auth                   | Done — Apple + email OTP, `profiles` table, RLS verified                          |
-| 4   | Onboarding             | Done — full flow, preferences schema, RLS verified                                |
-| 5   | Offline logging        | **Built** — all five log types offline + sync; airplane-mode check needs a device |
+As of 2026-09-06: **1131 tests across 67 suites**, `expo-doctor` 21/21, iOS bundle builds, and the
+RLS isolation suite passing 67 assertions against the live database.
 
-**Nothing has ever run on a physical device.** All verification so far is tests, bundling and
-direct database checks. Milestone 5's acceptance criterion (log in airplane mode, reconnect,
-verify sync) cannot be met without one — the offline guarantees are covered by tests against a
-real SQL engine, but no log has been made on a phone.
+Built: onboarding, auth, all five log types offline with a durable outbox and bidirectional sync,
+the timeline, the deterministic pattern engine, Insights, Gut Map, trends, appointment reports,
+diary export domain logic, the analytics wall, the crash scrubber, and account deletion end to end.
+
+**Nothing has ever run on a physical iPhone.** Every verification so far is tests, bundling and
+direct database checks. `expo export` proves Metro can build a bundle; it proves nothing about
+entitlements, SecureStore, native sheets, the SQLite native module or signing. Getting a build onto
+a device is the highest-value next step — see PROJECT_STATUS §5.
 
 ---
 
 ## Blocked on the project owner
 
-1. **Apple Developer Program** enrollment — approval takes 24–48h, blocks every iOS build.
-2. **Bundle identifier** — `app.config.ts` uses the provisional `com.gutsignal.app`. It cannot
-   change after a store release.
-3. **Apple auth provider** — not yet enabled in the Supabase dashboard. Sign in with Apple
-   fails on device until it is (the app detects this and points the user at email sign-in).
+The full list, with what each one unblocks, is in
+[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) §4 and §5. The short version:
 
-Everything not depending on these is buildable now.
+1. **Apple Developer Program** enrolment — blocks every iOS build and all device verification.
+2. **`eas init`** — `app.config.ts` still carries `projectId: undefined`, so no build can be
+   attributed to a project.
+3. **Apple auth provider** in the Supabase dashboard — Sign in with Apple fails on device until it
+   is enabled. The app detects this and points the user at email sign-in.
+4. **A Sentry DSN and a PostHog key** — the scrubber and the analytics wall are built and tested;
+   neither is wired to a real service.
+
+The bundle identifier is settled: `com.vivaan.gutsignal`, confirmed 2026-08-24. It cannot change
+after a store release.
 
 ---
 
 ## Documentation
 
-| Doc                                                          | Contents                                                            |
-| ------------------------------------------------------------ | ------------------------------------------------------------------- |
-| [CLAUDE.md](CLAUDE.md)                                       | Engineering rules. Read before changing anything                    |
-| [docs/MASTER_BUILD_SPEC.md](docs/MASTER_BUILD_SPEC.md)       | The product specification — source of truth                         |
-| [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)                 | Architecture, schema, privacy/threat model, risks, milestone status |
-| [docs/DECISIONS.md](docs/DECISIONS.md)                       | 29 ADRs — read before reversing a decision                          |
-| [docs/DATABASE.md](docs/DATABASE.md)                         | Tables, RLS policies, security verification, auth config            |
-| [docs/WINDOWS_IOS_WORKFLOW.md](docs/WINDOWS_IOS_WORKFLOW.md) | Prerequisites → dev build → TestFlight → App Store, without a Mac   |
+| Doc                                                          | Contents                                                          |
+| ------------------------------------------------------------ | ----------------------------------------------------------------- |
+| [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)             | **Project state, blockers and the hardening plan. Start here**    |
+| [CLAUDE.md](CLAUDE.md)                                       | Engineering rules. Read before changing anything                  |
+| [docs/MASTER_BUILD_SPEC.md](docs/MASTER_BUILD_SPEC.md)       | The product specification — source of truth for behaviour         |
+| [docs/DECISIONS.md](docs/DECISIONS.md)                       | 43 ADRs — read before reversing a decision                        |
+| [docs/PATTERN_ENGINE.md](docs/PATTERN_ENGINE.md)             | Every threshold, why it was chosen, and the honest limitations    |
+| [docs/PRIVACY_SECURITY.md](docs/PRIVACY_SECURITY.md)         | Data classes, RLS, scrubbing, and what is not protected yet       |
+| [docs/DATABASE.md](docs/DATABASE.md)                         | Tables, RLS policies, security verification, auth config          |
+| [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)                 | Architecture, schema, threat model, risks                         |
+| [docs/WINDOWS_IOS_WORKFLOW.md](docs/WINDOWS_IOS_WORKFLOW.md) | Prerequisites → dev build → TestFlight → App Store, without a Mac |
 
 ---
 

@@ -956,6 +956,11 @@ Smart App Control is a system security setting and disabling it is irreversible 
 reinstalling Windows, so it is left alone. Use `--no-bytecode` for local export checks; the block
 is expected to lapse on its own as the binary acquires reputation.
 
+**Update, 2026-09-06:** it lapsed. `npm run export:ios` now completes the Hermes step on this
+machine with no flag, so `verify:full` runs locally exactly as it runs in CI. Nothing was changed
+to achieve that, which is the point: the block was reputational and waiting was the correct
+response.
+
 ---
 
 ## ADR-0039 — Two moderate advisories are accepted rather than downgrading the SDK

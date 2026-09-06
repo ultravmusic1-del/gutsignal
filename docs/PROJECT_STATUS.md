@@ -12,14 +12,20 @@ coding agents. When state changes, change it **here** and let the others link to
 
 Everything below was run on 2026-09-06, not inferred.
 
-| Check                              | Result                                   |
-| ---------------------------------- | ---------------------------------------- |
-| `npm run verify`                   | **1131 tests, 67 suites** — pass         |
-| `npx expo-doctor`                  | **21/21**                                |
-| `npx expo export --platform ios`   | bundles (1988 modules)                   |
-| RLS isolation suite (live project) | **67 assertions** pass, no leftover rows |
-| Supabase security advisor          | no lints                                 |
-| `npm run format:check`             | clean                                    |
+| Check                              | Result                                          |
+| ---------------------------------- | ----------------------------------------------- |
+| `npm run verify:full`              | green end to end — the same commands CI runs    |
+| `npm test`                         | **1131 tests, 67 suites** — pass                |
+| `npx expo-doctor`                  | **21/21**                                       |
+| `npm run export:ios`               | bundles, **including Hermes bytecode** (5.8 MB) |
+| RLS isolation suite (live project) | **67 assertions** pass, no leftover rows        |
+| Supabase security advisor          | no lints                                        |
+| `npm audit --audit-level=high`     | passes — 14 moderate, 0 high/critical           |
+| CI (`.github/workflows/ci.yml`)    | written; `migrations` job awaits its first run  |
+
+> The Hermes bytecode step now works locally. Windows Smart App Control had been blocking that
+> binary as not-yet-reputable (ADR-0038); the block lapsed on its own, as expected. `--no-bytecode`
+> is no longer needed here.
 
 **Built:** onboarding, auth (Apple + email), all five log types offline with a durable outbox and
 bidirectional sync, timeline with filter/search/edit/delete, the deterministic pattern engine with
@@ -61,22 +67,31 @@ Do not re-open these; they are done and verified.
 
 No accounts, hardware or decisions needed. Ordered by value.
 
-### A1. CI and repository engineering (review §16–18) — highest value
+### A1. CI and repository engineering (review §16–18) — **DONE** (`20a35aa`)
 
-- [ ] `.github/workflows/ci.yml`: `npm ci` → typecheck → lint → `format:check` → jest
-      `--runInBand` → `expo-doctor` → `expo export --platform ios`
-- [ ] Split `verify` into `verify:fast` (typecheck + lint + tests) and `verify:full` (adds format,
-      doctor, ios export); point CI at `verify:full`
-- [ ] `npm audit` job with a policy that tolerates Expo-pinned transitives rather than auto-fixing
-      (see ADR-0039 — two moderate advisories are already accepted, not ignored)
-- [ ] Migration-from-zero job: spin up Postgres in CI, apply every migration in order, run
-      `rls_isolation.sql`, assert the schema. This is the job that would have caught the `do $`
-      defect on the day it was written
-- [ ] PR template, bug template, release-checklist template
-- [ ] `.github/dependabot.yml` scoped so it cannot propose upgrades that break the SDK 57 pin
+- [x] `.github/workflows/ci.yml` — three jobs: `verify`, `audit`, `migrations`
+- [x] `verify:fast` (typecheck + lint + tests) and `verify:full` (adds format, doctor, iOS
+      bundle). CI runs the `verify:full` commands step for step, in the same order
+- [x] `npm audit` gate at `--audit-level=high`. Moderate does not fail: ADR-0039 accepts two with
+      a documented absence of data exposure, and 14 are currently outstanding from Expo-pinned
+      transitives. A gate that fails on findings nobody may act on is one people learn to ignore
+- [x] Migrations-from-zero job — starts a local Supabase, applies every migration against an empty
+      database, runs `rls_isolation.sql`. The job that would have caught ADR-0041 the day it was
+      written
+- [x] PR template, bug template, release-checklist template. All ask for pasted output rather than
+      adjectives
+- [x] `.github/dependabot.yml`, ignoring the whole Expo and React Native surface, which
+      `npx expo install --check` owns
 
-> Branch protection itself is Bucket C — only a repo admin can enable it. I can write everything
-> the rules will enforce.
+**The verify job needs no secrets** — the suite was confirmed to pass with no `.env` at all — so
+the gate works on a fork's pull request exactly as on a branch.
+
+> **Not yet validated:** the `migrations` job has never run. There is no Docker on the development
+> machine, so its first real execution will be on Actions. Treat a first-run failure there as
+> expected maintenance, not as a broken migration.
+
+> Branch protection itself is Bucket C — only a repo admin can enable it. Everything the rules
+> will enforce is now written.
 
 ### A2. Pattern-engine methodology (review §3, §31)
 
@@ -122,9 +137,12 @@ No accounts, hardware or decisions needed. Ordered by value.
 
 ### A7. Documentation consolidation (review §15)
 
-- [ ] `README.md` — currently claims 357 tests and M0–M6. Reduce to setup, commands, and a link
-      here
-- [ ] Fold `HANDOFF.md` into this file; it is a loop artefact whose state is superseded
+- [x] `README.md` — the milestone table, the 357-test claim, the "29 ADRs" count and the
+      provisional bundle identifier are gone. It now carries setup, commands and a summary that
+      points here
+- [x] `HANDOFF.md` reduced to a pointer. It was written to be read first by agents and had gone on
+      describing a paused database, an unapplied migration and an unwritten deletion flow, all of
+      which were done. The full text stays in git history
 - [ ] Architecture and data-flow diagrams
 - [ ] Threat model refreshed for account deletion and the Edge Function boundary
 
