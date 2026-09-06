@@ -329,3 +329,71 @@ describe('scoreStatus', () => {
     expect(MIN_MEANINGFUL_DIFFERENCE).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Where each threshold actually bites (review §"pattern-engine validation").
+ *
+ * A sensitivity analysis asks which findings change when a threshold moves. These are that
+ * question in testable form: for each gate, one step below and exactly at the value, so the flip
+ * point is written down rather than inferred from the constant.
+ *
+ * Two things this buys. Changing a threshold now shows up as a failing test with the affected
+ * behaviour named, rather than as a number edited in isolation. And every gate is proven to be
+ * load-bearing — a threshold nothing depends on is a threshold that has quietly stopped working.
+ */
+describe('where the thresholds flip', () => {
+  const atSample = (n: number) =>
+    scoreStatus({
+      outcome: OCCURRENCE,
+      metrics: metrics({ exposedCount: n, controlCount: n }),
+      consistency: consistency(),
+      confidence: 0.9,
+    });
+
+  it('says nothing at all one observation below the floor, and speaks at it', () => {
+    expect(atSample(MIN_GROUP_FOR_ANY_CLAIM - 1)).toBe('insufficient_data');
+    expect(atSample(MIN_GROUP_FOR_ANY_CLAIM)).not.toBe('insufficient_data');
+  });
+
+  it('will not reach moderate one observation below its gate', () => {
+    expect(atSample(MIN_GROUP_FOR_MODERATE - 1)).toBe('emerging');
+    expect(atSample(MIN_GROUP_FOR_MODERATE)).toBe('moderate');
+  });
+
+  it('will not reach the strongest status one observation below its gate', () => {
+    expect(atSample(MIN_GROUP_FOR_STRONG - 1)).toBe('moderate');
+    expect(atSample(MIN_GROUP_FOR_STRONG)).toBe('stronger_recurring_signal');
+  });
+
+  // The effect-size gate, which is what stops a wide scan turning noise into findings (§61).
+  it('calls a difference one point under the floor no clear pattern', () => {
+    const at = (difference: number) =>
+      scoreStatus({
+        outcome: OCCURRENCE,
+        metrics: metrics({ exposedCount: 20, controlCount: 20, absoluteDifference: difference }),
+        consistency: consistency(),
+        confidence: 0.9,
+      });
+
+    expect(at(MIN_MEANINGFUL_DIFFERENCE - 0.01)).toBe('no_clear_pattern');
+    expect(at(MIN_MEANINGFUL_DIFFERENCE)).not.toBe('no_clear_pattern');
+  });
+
+  /**
+   * Direction is not strength. A protective association sits at the same distance from zero and
+   * must flip at the same point — otherwise the engine is quietly more willing to blame a food
+   * than to exonerate one.
+   */
+  it('flips at the same magnitude in both directions', () => {
+    const at = (difference: number) =>
+      scoreStatus({
+        outcome: OCCURRENCE,
+        metrics: metrics({ exposedCount: 20, controlCount: 20, absoluteDifference: difference }),
+        consistency: consistency(),
+        confidence: 0.9,
+      });
+
+    expect(at(-(MIN_MEANINGFUL_DIFFERENCE - 0.01))).toBe('no_clear_pattern');
+    expect(at(-MIN_MEANINGFUL_DIFFERENCE)).not.toBe('no_clear_pattern');
+  });
+});

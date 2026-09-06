@@ -393,6 +393,37 @@ completeness, status, confidence, limitations and generation time.
 `ENGINE_VERSION` moves whenever a change could alter a finding for unchanged logs. A pure
 refactor does not bump it; a threshold change does.
 
+### What `1.0.0` is frozen at
+
+`1.0.0` is the methodology GutSignal ships with, and it covers everything in this document: the
+observability rules in §3, the candidate limits in §5, the statistics in §6, the confounding
+threshold in §7, the confidence components in §8, the five statuses and their gates in §9, the
+breadth curve in §10, and the observation windows in §11.
+
+**A bump is required for any change to those.** Concretely: a threshold value, a new or removed
+confidence component, a change to what counts as an observation, a change to which outcomes are
+scanned, or a change to how an effect size is measured. ADR-0044 — scoring severity on its own
+scale — is exactly the kind of change that would require one.
+
+**A bump is not required** for wording, ordering, formatting, performance, or anything in
+`domain/patterns/` that describes a finding without changing it.
+
+### What a bump does to findings already stored
+
+`pattern_findings` carries `engine_version`, and the unique index that identifies a computation
+includes it. A bump therefore creates a **parallel** row rather than overwriting the old one,
+which is deliberate: a finding is only meaningful alongside the rules that produced it, and
+silently recomputing someone's history under new rules would change what they were told without
+telling them.
+
+The consequence is a rule for whoever bumps it: **anything reading `pattern_findings` must filter
+to the current `ENGINE_VERSION`.** Mixing versions in one list would present two answers to the
+same question as though they agreed.
+
+Nothing reads that table yet — Insights recomputes from local logs on every open, so today a bump
+simply takes effect. The filter becomes load-bearing the moment findings are read back rather
+than recomputed, and that is the change to watch for.
+
 **The scan returns its negatives.** "We looked and found nothing" is a much stronger statement
 than "we never looked", and a user cannot tell them apart if the engine drops what came to
 nothing.

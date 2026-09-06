@@ -439,6 +439,111 @@ const tooShort: Scenario = {
   expect: { absent: true },
 };
 
+// --- 16. Someone who logs in bursts ----------------------------------------
+
+const inconsistentLogger: Scenario = {
+  name: 'inconsistent logger',
+  why: 'Real diaries are not evenly spaced. Someone logs for four days, forgets for ten, comes back. The comparison can still look clean because the days that exist are unambiguous — and confidence must reflect how much of the period is simply unknown, not how tidy the surviving days are.',
+  logs: (() => {
+    // Four days on, ten days off, repeatedly.
+    const logged = LONG.filter((_, i) => i % 14 < 4);
+    const exposed = logged.filter((_, i) => i % 2 === 0);
+    const control = logged.filter((_, i) => i % 2 === 1);
+
+    return association({
+      exposedDates: exposed,
+      controlDates: control,
+      exposedRate: 0.9,
+      controlRate: 0.1,
+    });
+  })(),
+  range: RANGE,
+  factorKey: 'caffeinated',
+  outcome: BLOATING,
+  // The association inside the logged days is strong, and most of the period is still unknown.
+  expect: {
+    notStatus: ['stronger_recurring_signal'],
+    limitation: /less than two thirds|unknown/i,
+  },
+};
+
+// --- 17. A week when everything was bad ------------------------------------
+
+const illnessWeek: Scenario = {
+  name: 'illness week',
+  why: 'A stomach bug produces a week of symptoms regardless of what was eaten. A factor that happens to appear during that week must not inherit the credit for it, and week-to-week consistency is what separates the two.',
+  logs: (() => {
+    const illness = new Set(LONG.slice(28, 35));
+
+    return mergeLogs(
+      // The factor is spread evenly across the whole period, unrelated to the illness.
+      { meals: EXPOSED.map((date) => makeMeal(date, { tags: ['caffeinated'] })) },
+      // Symptoms only during the bad week, on every day of it.
+      { symptoms: [...illness].map((date) => makeSymptom(date)) },
+      { wellbeing: LONG.filter((date) => !illness.has(date)).map((date) => makeWellbeing(date)) }
+    );
+  })(),
+  range: RANGE,
+  factorKey: 'caffeinated',
+  outcome: BLOATING,
+  // One week pointing one way, eleven pointing nowhere. That is not a pattern.
+  expect: { notStatus: ['stronger_recurring_signal', 'moderate'] },
+};
+
+// --- 18. Someone who never records a symptom -------------------------------
+
+const noSymptomsAtAll: Scenario = {
+  name: 'no-symptom user',
+  why: 'Plenty of people track for weeks and feel fine throughout. The engine must find nothing and say nothing, rather than manufacturing a comparison out of a column that is empty on every single day.',
+  logs: mergeLogs(
+    { meals: EXPOSED.map((date) => makeMeal(date, { tags: ['caffeinated'] })) },
+    { wellbeing: LONG.map((date) => makeWellbeing(date)) }
+  ),
+  range: RANGE,
+  factorKey: 'caffeinated',
+  outcome: BLOATING,
+  // `outcomesFor` derives outcomes from what the diary contains, so a symptom nobody has ever
+  // logged is never asked about.
+  expect: { absent: true },
+};
+
+// --- 19. Symptoms nearly every day -----------------------------------------
+
+const highBaseline: Scenario = {
+  name: 'very high symptom baseline',
+  why: 'Someone with daily symptoms has almost no symptom-free days to compare against. A 97% rate against a 93% rate is four points on a very unwell person, and presenting that as a finding would hand them a food to give up for nothing.',
+  logs: association({ exposedRate: 0.97, controlRate: 0.93 }),
+  range: RANGE,
+  factorKey: 'caffeinated',
+  outcome: BLOATING,
+  expect: { status: ['no_clear_pattern'] },
+};
+
+// --- 20. Two things changed at once ----------------------------------------
+
+const simultaneousDietChange: Scenario = {
+  name: 'two diet changes on the same day',
+  why: 'People do not change one thing at a time. Cutting coffee and starting to eat earlier on the same Monday makes the two inseparable for the rest of the diary, and the honest answer is to say so rather than to credit whichever was examined first.',
+  logs: (() => {
+    const before = LONG.slice(0, 42);
+    const after = LONG.slice(42);
+
+    return mergeLogs(
+      // Both factors appear together, and only in the second half.
+      { meals: after.map((date) => makeMeal(date, { tags: ['caffeinated', 'spicy'] })) },
+      { symptoms: before.slice(0, 34).map((date) => makeSymptom(date)) },
+      { wellbeing: before.slice(34).map((date) => makeWellbeing(date)) },
+      { symptoms: after.slice(0, 8).map((date) => makeSymptom(date)) },
+      { wellbeing: after.slice(8).map((date) => makeWellbeing(date)) }
+    );
+  })(),
+  range: RANGE,
+  factorKey: 'caffeinated',
+  outcome: BLOATING,
+  // Whatever else it concludes, it must notice the other factor moved with this one.
+  expect: { hasConfounder: true },
+};
+
 export const SCENARIOS: Scenario[] = [
   obvious,
   noAssociation,
@@ -452,6 +557,11 @@ export const SCENARIOS: Scenario[] = [
   timezoneBoundary,
   simultaneousExposures,
   customFactor,
+  inconsistentLogger,
+  illnessWeek,
+  noSymptomsAtAll,
+  highBaseline,
+  simultaneousDietChange,
   noControlGroup,
   contextFactor,
   tooShort,

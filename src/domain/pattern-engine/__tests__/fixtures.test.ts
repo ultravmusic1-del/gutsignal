@@ -27,8 +27,15 @@ function findingFor(scenario: Scenario): Finding | undefined {
 }
 
 describe('the fixture suite', () => {
-  it('covers every scenario CLAUDE.md §42 requires', () => {
-    expect(SCENARIOS).toHaveLength(15);
+  /**
+   * §42 names fifteen scenarios, which is a floor rather than a target.
+   *
+   * Asserted as a minimum on purpose: an exact count turns every new fixture into a failing test,
+   * which teaches people to stop adding them. The corpus should grow as real diaries suggest new
+   * ways to be wrong — the adversarial set added after the 2026-09 review is exactly that.
+   */
+  it('covers at least every scenario CLAUDE.md §42 requires', () => {
+    expect(SCENARIOS.length).toBeGreaterThanOrEqual(15);
     expect(new Set(SCENARIOS.map((s) => s.name)).size).toBe(SCENARIOS.length);
   });
 

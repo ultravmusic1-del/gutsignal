@@ -101,11 +101,20 @@ the gate works on a fork's pull request exactly as on a branch.
       finding is about; severity is scored from `meanSeverityDifference` over `SEVERITY_SCALE_SPAN`,
       weekly consistency measures the same quantity, and precision is unmeasured rather than
       assumed — which holds severity findings to `moderate` at best, emergently. ADR-0044
-- [ ] Expand the fixture corpus with the adversarial diaries the review lists: highly correlated
-      foods, correlated context factors, inconsistent logger, extreme sparsity, repetitive diet,
-      simultaneous diet changes, travel, illness week, no-symptom user, very high symptom baseline
-- [ ] Threshold sensitivity analysis — show which findings flip when thresholds move
-- [ ] Freeze `ENGINE_VERSION` semantics for 1.0 and write down what a bump means
+- [x] **Adversarial fixtures — DONE.** Five added to the §42 corpus, now twenty: an inconsistent
+      logger who works in bursts, an illness week where everything is bad regardless of the factor,
+      a user who never records a symptom at all, a very high symptom baseline where 97% against 93%
+      must not become a finding, and two diet changes starting on the same day. All five passed
+      their expectations first time, which is the engine behaving as documented
+- [x] **Threshold sensitivity — DONE.** Five flip-point tests in `scoring.test.ts`: one step below
+      and exactly at each gate, so the point at which a finding changes is written down rather than
+      inferred from a constant. Changing a threshold now fails a test that names the affected
+      behaviour, and a gate nothing depends on shows up as a gate that has stopped working
+- [x] **`ENGINE_VERSION` frozen for 1.0 — DONE.** `PATTERN_ENGINE.md` §12 now says what 1.0.0
+      covers, what forces a bump and what does not, and — the part that bites — what a bump does to
+      findings already stored: `pattern_findings` gains a parallel row rather than overwriting, so
+      anything reading that table must filter to the current version. Nothing reads it yet, which
+      is exactly why the rule is written down now
 
 ### A3. Test layers Jest can still reach
 
