@@ -1,6 +1,6 @@
 # GutSignal — Project Status & Hardening Plan
 
-**Updated:** 2026-09-06 · **Branch:** `main` @ `c3f39cb` · **Source of truth for project state.**
+**Updated:** 2026-09-06 · **Branch:** `main` @ `3b60aec` · **Source of truth for project state.**
 
 This file exists because status was drifting across `README.md`, `HANDOFF.md` and
 `PROJECT_PLAN.md`, and stale status is worse here than on an ordinary team: it actively directs
@@ -15,7 +15,7 @@ Everything below was run on 2026-09-06, not inferred.
 | Check                              | Result                                          |
 | ---------------------------------- | ----------------------------------------------- |
 | `npm run verify:full`              | green end to end — the same commands CI runs    |
-| `npm test`                         | **1245 tests, 75 suites** — pass                |
+| `npm test`                         | **1286 tests, 79 suites** — pass                |
 | `npx expo-doctor`                  | **21/21**                                       |
 | `npm run export:ios`               | bundles, **including Hermes bytecode** (5.9 MB) |
 | RLS isolation suite (live project) | **67 assertions** pass, no leftover rows        |
@@ -30,7 +30,8 @@ Everything below was run on 2026-09-06, not inferred.
 **Built:** onboarding, auth (Apple + email), all five log types offline with a durable outbox and
 bidirectional sync, timeline with filter/search/edit/delete, the deterministic pattern engine with
 confounders and breadth control, Insights, Gut Map, trends, appointment reports, diary export
-domain logic, the analytics wall, the crash scrubber, and account deletion end to end.
+domain logic, the analytics wall, the crash scrubber, account deletion end to end, and local
+reminders with quiet hours (Milestone 14).
 
 ### The one fact that governed the last phase, and what it cost
 
@@ -344,3 +345,27 @@ From the review, and worth keeping: do not replace SQLite with a sync framework,
 analysis to an LLM, do not put everything in Zustand, do not turn repositories into hooks, do not
 remove the deterministic domain layer, do not switch backends without a concrete limitation, and
 do not rewrite in Swift. The architecture is not what needs work.
+
+---
+
+## 8. Milestone 14 — Notifications (2026-09-06)
+
+Shipped: morning check-in, evening check-in, weekly review, quiet hours, per-reminder times, and a
+permission prompt opened only by a deliberate press. All local scheduling, so it works in Expo Go
+and is verifiable on the phone now rather than after a development build.
+
+**Two spec toggles are deliberately absent.** Experiment reminders need experiments (Milestone 11)
+and product updates need a push channel that does not exist. A switch that cannot do what its label
+says is the placeholder control `CLAUDE.md` §57 rules out; each is one line away once the thing
+behind it exists.
+
+**Still needs the phone.** Everything above is unit-tested, and none of it proves iOS actually
+delivers a reminder. The device pass is: allow notifications, set the evening check-in a few
+minutes ahead, background the app, and wait. Then set one inside quiet hours and confirm the row
+says it will not be sent. Then deny notifications in iOS Settings, reopen, and confirm the screen
+says iOS is blocking them rather than pretending to work.
+
+**Deferred, not forgotten:** preferences are device-local and not synced. That is correct for a
+schedule registered with one phone's OS, but it means a second device starts from the defaults. If
+that becomes wrong, the fix is a `notification_preferences` column on `user_preferences` and a
+last-writer-wins merge — not the outbox, which carries health records.
