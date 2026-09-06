@@ -121,7 +121,7 @@ jobs:
       # "rate limit exceeded" and took the build down for a reason that had nothing to do with the
       # commit. A pinned tag is a direct download with no API call, and it also means a CLI release
       # cannot change what this job tests overnight (CLAUDE.md §39).
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: 2.116.0
 
