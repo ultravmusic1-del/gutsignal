@@ -400,3 +400,81 @@ describe('analyse — severity outcomes', () => {
     expect(findings.every((f) => f.outcome.kind !== 'symptom_severity')).toBe(true);
   });
 });
+
+/**
+ * Scoring a severity outcome by the thing it is about (spec §57, §58).
+ *
+ * A severity finding's rate metrics ARE the occurrence metrics — `outcomeOccurredOn` returns the
+ * same boolean for both kinds — so scoring from `absoluteDifference` scored intensity by how
+ * often the symptom appeared. Two groups reporting a symptom equally often but at wildly
+ * different strengths therefore came out as `no_clear_pattern`: the engine looked at the one
+ * number that was identical between them and concluded nothing was there.
+ *
+ * That is the opposite of conservative. It is not "we are not sure", it is "we measured the
+ * wrong quantity and reported certainty about it".
+ */
+describe('analyse — severity is scored on its own scale', () => {
+  const exposedDates = ALL.filter((_, i) => i % 2 === 0);
+  const controlDates = ALL.filter((_, i) => i % 2 === 1);
+
+  /** Symptoms every single day, so occurrence is identical; only the strength differs. */
+  function equalFrequencyDifferentIntensity(exposedSeverity: number, controlSeverity: number) {
+    return {
+      ...empty,
+      meals: exposedDates.map((date) => meal(date, ['caffeinated'])),
+      symptoms: [
+        ...exposedDates.map((date) => symptom(date, exposedSeverity)),
+        ...controlDates.map((date) => symptom(date, controlSeverity)),
+      ],
+    };
+  }
+
+  const severityFinding = (logs: LogSet) =>
+    run(logs).find((f) => f.outcome.kind === 'symptom_severity');
+
+  it('does not call a large intensity difference "no clear pattern"', () => {
+    const finding = severityFinding(equalFrequencyDifferentIntensity(9, 2));
+
+    expect(finding).toBeDefined();
+    // The occurrence rates are identical, which is exactly why this used to fail.
+    expect(finding!.metrics.absoluteDifference).toBe(0);
+    expect(finding!.metrics.meanSeverityDifference).toBe(7);
+    expect(finding!.status).not.toBe('no_clear_pattern');
+  });
+
+  it('still says no clear pattern when the intensities really are alike', () => {
+    // One point apart on a 1–10 scale is not a finding, however many days back it.
+    const finding = severityFinding(equalFrequencyDifferentIntensity(6, 5));
+
+    expect(finding).toBeDefined();
+    expect(finding!.status).toBe('no_clear_pattern');
+  });
+
+  /**
+   * No uncertainty band is computed for a difference of means — the interval in `metrics` is a
+   * Wilson/Newcombe band on the difference of *rates*, which is not what a severity finding is
+   * about. Precision is therefore unmeasured rather than assumed, and because confidence is the
+   * minimum of its components, that alone keeps severity findings below the strong threshold.
+   * The cap is emergent, not a special case.
+   */
+  it('never promotes a severity finding to the strongest status', () => {
+    const finding = severityFinding(equalFrequencyDifferentIntensity(10, 1));
+
+    expect(finding!.status).not.toBe('stronger_recurring_signal');
+  });
+
+  it('says out loud that the intensity range was not estimated', () => {
+    const finding = severityFinding(equalFrequencyDifferentIntensity(9, 2));
+
+    expect(finding!.limitations.join(' ')).toMatch(/range|precise|pin/i);
+  });
+
+  // Occurrence outcomes must be untouched by any of this.
+  it('leaves occurrence outcomes scored exactly as before', () => {
+    const findings = run(diary({ strength: 0.85, background: 0.15 }));
+    const occurrence = findings.find((f) => f.outcome.kind === 'symptom_occurrence');
+
+    expect(occurrence).toBeDefined();
+    expect(occurrence!.status).not.toBe('no_clear_pattern');
+  });
+});

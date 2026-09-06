@@ -15,7 +15,7 @@
  * `docs/PATTERN_ENGINE.md`.
  */
 
-import type { ComparisonMetrics, ConsistencyMetrics, TrackingCompleteness } from './types';
+import type { ComparisonMetrics, ConsistencyMetrics, Outcome, TrackingCompleteness } from './types';
 
 /** Group size at which sample size stops limiting confidence. */
 export const FULL_SAMPLE = 20;
@@ -42,7 +42,26 @@ export const UNMEASURED_CONSISTENCY = 0.5;
 export const PRECISE_WIDTH = 0.3;
 export const USELESS_WIDTH = 1;
 
+/**
+ * The most precision available when no uncertainty band was computed at all.
+ *
+ * `confidenceInterval` is a Wilson/Newcombe band on a difference of **rates**. A severity finding
+ * is about a difference of **means**, which that band does not describe — so for those outcomes
+ * precision is unknown rather than wide, and scoring it as either full marks or zero would be a
+ * claim the engine has not earned. It sits at the same value as `UNMEASURED_CONSISTENCY`, for the
+ * same reason: absence of evidence is not evidence.
+ *
+ * This has a deliberate consequence. Confidence is the minimum of its components, so an
+ * unmeasured precision holds every severity finding below `MIN_CONFIDENCE_FOR_STRONG` — they can
+ * reach `moderate` at best. That ceiling is emergent rather than a special case, which is the
+ * right shape: it lifts by itself on the day an interval for a difference of means is computed,
+ * with no rule left behind to remember to delete.
+ */
+export const UNMEASURED_PRECISION = 0.5;
+
 export type ConfidenceInput = {
+  /** Which question was asked. Decides whether the rate interval describes this finding at all. */
+  outcome: Outcome;
   metrics: ComparisonMetrics;
   consistency: ConsistencyMetrics;
   trackingCompleteness: TrackingCompleteness;
@@ -73,6 +92,7 @@ export type ConfidenceAssessment = {
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
 
 export function assessConfidence({
+  outcome,
   metrics,
   consistency,
   trackingCompleteness,
@@ -81,6 +101,8 @@ export function assessConfidence({
   // A hundred exposed days against three controls is a sample of three.
   const smallerGroup = Math.min(metrics.exposedCount, metrics.controlCount);
 
+  const unmeasuredPrecision = outcome.kind === 'symptom_severity';
+
   const components: ConfidenceComponents = {
     sample: clamp(smallerGroup / FULL_SAMPLE),
     coverage: clamp(trackingCompleteness.coverage),
@@ -88,9 +110,13 @@ export function assessConfidence({
       consistency.agreementRate === null
         ? UNMEASURED_CONSISTENCY
         : clamp(consistency.agreementRate),
-    // A band spanning the whole range says nothing; a narrow one pins the answer down.
-    precision:
-      metrics.confidenceInterval === null
+    // A band spanning the whole range says nothing; a narrow one pins the answer down. For a
+    // severity outcome there is no applicable band at all — the interval describes a difference
+    // of rates, and this finding is about a difference of means — so precision is unmeasured
+    // rather than wide.
+    precision: unmeasuredPrecision
+      ? UNMEASURED_PRECISION
+      : metrics.confidenceInterval === null
         ? 0
         : clamp(
             (USELESS_WIDTH - (metrics.confidenceInterval.high - metrics.confidenceInterval.low)) /
@@ -125,7 +151,12 @@ export function assessConfidence({
     );
   }
 
-  if (components.precision <= WEAK_COMPONENT) {
+  if (unmeasuredPrecision) {
+    // Not "still wide" — that would claim a band was computed and came out broad. None was.
+    limitations.push(
+      'The range this intensity difference could really sit in has not been worked out, so it is reported cautiously.'
+    );
+  } else if (components.precision <= WEAK_COMPONENT) {
     limitations.push('The range of possible differences is still wide.');
   }
 

@@ -15,7 +15,7 @@ Everything below was run on 2026-09-06, not inferred.
 | Check                              | Result                                          |
 | ---------------------------------- | ----------------------------------------------- |
 | `npm run verify:full`              | green end to end — the same commands CI runs    |
-| `npm test`                         | **1131 tests, 67 suites** — pass                |
+| `npm test`                         | **1136 tests, 67 suites** — pass                |
 | `npx expo-doctor`                  | **21/21**                                       |
 | `npm run export:ios`               | bundles, **including Hermes bytecode** (5.8 MB) |
 | RLS isolation suite (live project) | **67 assertions** pass, no leftover rows        |
@@ -95,11 +95,10 @@ the gate works on a fork's pull request exactly as on a branch.
 
 ### A2. Pattern-engine methodology (review §3, §31)
 
-- [ ] **Severity scoring semantics.** `status` and `confidence` still derive from
-      `absoluteDifference` (occurrence) for every outcome kind, so equal frequency with very
-      different intensity scores `no_clear_pattern`. Score severity from `meanSeverityDifference`
-      on its own scale. Needs an ADR and fixture scenarios; documented today as a known limitation
-      in `PATTERN_ENGINE.md` §6 rather than left silent
+- [x] **Severity scoring semantics — DONE.** `comparisonEffect()` now decides which difference a
+      finding is about; severity is scored from `meanSeverityDifference` over `SEVERITY_SCALE_SPAN`,
+      weekly consistency measures the same quantity, and precision is unmeasured rather than
+      assumed — which holds severity findings to `moderate` at best, emergently. ADR-0044
 - [ ] Expand the fixture corpus with the adversarial diaries the review lists: highly correlated
       foods, correlated context factors, inconsistent logger, extreme sparsity, repetitive diet,
       simultaneous diet changes, travel, illness week, no-symptom user, very high symptom baseline

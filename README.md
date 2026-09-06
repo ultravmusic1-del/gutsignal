@@ -127,7 +127,7 @@ zero and runs that suite on every pull request.
 is the only file to update when state moves; this section is a summary and will otherwise drift,
 which is how this README came to claim 357 tests while `main` had 1131.
 
-As of 2026-09-06: **1131 tests across 67 suites**, `expo-doctor` 21/21, iOS bundle builds, and the
+As of 2026-09-06: **1136 tests across 67 suites**, `expo-doctor` 21/21, iOS bundle builds, and the
 RLS isolation suite passing 67 assertions against the live database.
 
 Built: onboarding, auth, all five log types offline with a durable outbox and bidirectional sync,

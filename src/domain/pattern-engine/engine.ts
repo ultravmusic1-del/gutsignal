@@ -34,7 +34,7 @@ import {
   type DateRange,
   type LogSet,
 } from './observations';
-import { scoreStatus } from './scoring';
+import { comparisonEffect, scoreStatus } from './scoring';
 import { ENGINE_VERSION, type Finding, type ObservationWindowKey, type Outcome } from './types';
 import { DEFAULT_WINDOW } from './windows';
 
@@ -146,9 +146,18 @@ export function analyse({
       // asked, and a question that could not be answered was not one of them.
       if (outcome.kind === 'symptom_severity' && metrics.meanSeverityDifference === null) continue;
 
-      const consistency = weeklyConsistency(observations, metrics.absoluteDifference);
+      // Consistency is checked against the same quantity the finding is about, and in the same
+      // direction — a rate difference for occurrence outcomes, a difference of mean intensity for
+      // `symptom_severity`.
+      const effect = comparisonEffect(outcome, metrics);
+      const consistency = weeklyConsistency(
+        observations,
+        effect.direction,
+        outcome.kind === 'symptom_severity' ? 'severity' : 'rate'
+      );
 
       const assessment = assessConfidence({
+        outcome,
         metrics,
         consistency,
         trackingCompleteness: completeness,
@@ -168,7 +177,7 @@ export function analyse({
         confounders,
         trackingCompleteness: completeness,
 
-        status: scoreStatus({ metrics, consistency, confidence: assessment.confidence }),
+        status: scoreStatus({ outcome, metrics, consistency, confidence: assessment.confidence }),
         confidence: assessment.confidence,
         limitations: assessment.limitations,
 

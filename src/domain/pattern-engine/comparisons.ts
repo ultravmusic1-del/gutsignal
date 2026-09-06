@@ -171,9 +171,44 @@ function weekKey(localDate: string): string {
  * A week counts as comparable only when it contains observed days on **both** sides. Weeks where
  * the user only ate the thing, or only avoided it, cannot speak to a difference at all.
  */
+/**
+ * Difference in mean recorded intensity between two groups of days, or null when either side has
+ * no value to average.
+ */
+function severityDifferenceIn(
+  exposedGroup: Observation[],
+  controlGroup: Observation[]
+): number | null {
+  const meanOf = (group: Observation[]): number | null => {
+    const values = group.flatMap((observation) =>
+      observation.outcomeValue === null ? [] : [observation.outcomeValue]
+    );
+
+    if (values.length === 0) return null;
+
+    return values.reduce((total, value) => total + value, 0) / values.length;
+  };
+
+  const exposedMean = meanOf(exposedGroup);
+  const controlMean = meanOf(controlGroup);
+
+  if (exposedMean === null || controlMean === null) return null;
+
+  return exposedMean - controlMean;
+}
+
 export function weeklyConsistency(
   observations: Observation[],
-  overallDifference: number
+  overallDifference: number,
+  /**
+   * Which quantity a week is asked to agree about.
+   *
+   * It has to be the same one the headline difference is about. Checking whether a symptom
+   * appeared more *often* each week, and then reporting that as the consistency of an *intensity*
+   * finding, would be a second copy of the defect ADR-0044 exists to remove — agreement measured
+   * on a quantity the finding never claimed.
+   */
+  measure: 'rate' | 'severity' = 'rate'
 ): ConsistencyMetrics {
   const weeks = new Map<string, Observation[]>();
 
@@ -191,12 +226,18 @@ export function weeklyConsistency(
 
     if (exposedGroup.length === 0 || controlGroup.length === 0) continue;
 
+    // A severity week needs a mean on both sides, exactly as the overall comparison does. A week
+    // where the symptom never appeared on one side cannot speak to a difference in how strong it
+    // was, so it is not comparable — counting it would let silence vote.
+    const weekDifference =
+      measure === 'severity'
+        ? severityDifferenceIn(exposedGroup, controlGroup)
+        : exposedGroup.filter((o) => o.outcomeOccurred).length / exposedGroup.length -
+          controlGroup.filter((o) => o.outcomeOccurred).length / controlGroup.length;
+
+    if (weekDifference === null) continue;
+
     comparableWeeks += 1;
-
-    const exposedRate = exposedGroup.filter((o) => o.outcomeOccurred).length / exposedGroup.length;
-    const controlRate = controlGroup.filter((o) => o.outcomeOccurred).length / controlGroup.length;
-
-    const weekDifference = exposedRate - controlRate;
 
     if (
       (overallDifference > 0 && weekDifference > 0) ||

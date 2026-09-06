@@ -83,6 +83,9 @@ export function applyMultipleTestingControl(findings: Finding[]): Finding[] {
       ...finding,
       confidence,
       status: scoreStatus({
+        // Re-scoring must ask the same question the finding was scored on originally, or the
+        // breadth penalty would quietly change which difference the threshold applies to.
+        outcome: finding.outcome,
         metrics: finding.metrics,
         consistency: finding.consistency,
         confidence,

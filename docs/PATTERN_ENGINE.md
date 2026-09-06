@@ -170,16 +170,48 @@ corroborated each other. It also consumed a slot in the breadth correction below
 genuine finding look weaker to pay for a question that was never asked. On the sample diary this
 removed six of eighteen comparisons.
 
-> ### ⚠ A severity finding's status still comes from the occurrence difference
+### A severity finding is scored on its own scale
+
+`comparisonEffect()` decides which difference a finding is about. For the five occurrence-shaped
+outcomes that is the difference in rates. For `symptom_severity` it is the difference in mean
+recorded intensity, divided by `SEVERITY_SCALE_SPAN` (9, the width of the 1–10 scale) so it can be
+compared against the same thresholds.
+
+| What                        | Occurrence outcomes         | `symptom_severity`         |
+| --------------------------- | --------------------------- | -------------------------- |
+| Smallest difference shown   | 15 percentage points        | 1.35 points of intensity   |
+| Direction                   | sign of the rate difference | sign of the mean intensity |
+| Weekly consistency measures | rate difference per week    | mean intensity per week    |
+
+Both rows of the first line are the same constant, `MIN_MEANINGFUL_DIFFERENCE`, read through
+`SEVERITY_SCALE_SPAN`. Its canonical value is pinned in the threshold table in §9 — deliberately
+not repeated here as a table key, because two rows claiming to define one constant is how a
+document starts disagreeing with itself.
+
+That correspondence — 15 points of frequency ≈ 1.35 points of intensity — is a judgement, not a
+measurement. It is recorded here so it can be argued with rather than discovered.
+
+Until this, every outcome was scored from `absoluteDifference`. Because a severity finding's rate
+metrics **are** the occurrence metrics, that scored intensity by how often the symptom appeared:
+two groups reporting a symptom equally often at wildly different strengths came out
+`no_clear_pattern`, because the engine read the one number that was identical between them. That
+is not conservatism — it is confidence about the wrong quantity. ADR-0044.
+
+> ### ⚠ No uncertainty band is computed for a difference of means
 >
-> `status` and `confidence` are scored from `absoluteDifference` — the difference in how often the
-> symptom occurred — for every outcome kind, including `symptom_severity`. So a large difference in
-> _intensity_ between two groups that report the symptom equally often is currently scored as
-> `no_clear_pattern`.
+> `confidenceInterval` is a Wilson/Newcombe band on a difference of **rates**, which does not
+> describe a severity finding. Precision for those outcomes is therefore **unmeasured**
+> (`UNMEASURED_PRECISION`, 0.5) rather than assumed, and the finding carries a limitation saying
+> so in plain language.
 >
-> The finding is described correctly when it is shown; it is the ranking that does not yet know
-> what it is ranking. Changing it means scoring severity from `meanSeverityDifference` on its own
-> scale, which is a methodology change and belongs in an ADR with the fixtures to match.
+> Because confidence is the minimum of its components, that alone holds every severity finding
+> below `MIN_CONFIDENCE_FOR_STRONG` — they reach `moderate` at best. **The ceiling is emergent,
+> not a rule.** It lifts by itself on the day an interval for a difference of means is computed,
+> leaving no special case behind to remember to delete.
+>
+> Adding that interval means a Welch-style band, and doing it properly means a t-distribution
+> rather than a normal approximation — the same objection §6 already raises about Newcombe being
+> liberal at the extremes. That is a piece of statistics worth doing deliberately, not in passing.
 
 ### Uncertainty
 

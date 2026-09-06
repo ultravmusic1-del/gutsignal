@@ -1210,3 +1210,67 @@ the new ones and earning nothing for their write cost.
 larger, one straddling a boundary, ties returned in a different order on every call (as Postgres
 is free to do), a row updated mid-pagination, and a tombstone sharing a timestamp with a live row.
 All six were confirmed to fail against the previous implementation before the fix was kept.
+
+---
+
+## ADR-0044 — A severity finding is scored by the severity difference
+
+**Status:** Accepted · **Date:** 2026-09-06
+
+**Context.** ADR-0040 stopped the engine describing an intensity finding as a frequency, and
+stopped it emitting one where no intensity comparison was possible. It left the ranking alone, and
+said so: `status` and `confidence` were still scored from `absoluteDifference` for every outcome
+kind.
+
+That remainder is not cosmetic. A severity finding's rate metrics **are** the occurrence metrics —
+`outcomeOccurredOn` returns the same boolean for both kinds — so scoring intensity from
+`absoluteDifference` measured how _often_ the symptom appeared. Two groups reporting a symptom
+equally often at 9 out of 10 and 2 out of 10 produced an `absoluteDifference` of exactly zero and
+scored `no_clear_pattern`.
+
+That is the failure mode worth naming precisely. It is not the engine being cautious about a
+genuine difference; it is the engine reading the one number that was identical between the two
+groups and reporting certainty about it. A user with a real, large intensity difference was told
+there was no pattern.
+
+**Alternatives considered.** (a) Suppress severity findings entirely until the statistics are
+complete. (b) Give severity its own threshold constants. (c) Normalise the mean difference onto
+the existing scale and reuse the thresholds.
+
+**Reason.** (c).
+
+(a) discards a real signal that the engine already computes correctly, to avoid a scoring bug
+rather than to fix it.
+
+(b) doubles a threshold table that already needs justifying once. The comparison being made is the
+same shape — how far apart are two groups — and the honest difference is the unit, not the
+question. Dividing by `SEVERITY_SCALE_SPAN` (9, the width of the 1–10 scale) makes
+`MIN_MEANINGFUL_DIFFERENCE` mean "15 percentage points of occurrence" for one kind of outcome and
+"1.35 points of intensity" for the other. That correspondence is a judgement and is written into
+`PATTERN_ENGINE.md` §6 as one, so it can be argued with rather than discovered.
+
+**Consequences.** `comparisonEffect(outcome, metrics)` is now the single place that decides which
+difference a finding is about, and `scoreStatus` and `assessConfidence` both take the outcome.
+Making that parameter **required rather than optional** was deliberate: the compiler then found
+every call site, including the re-score inside `multiple-testing.ts` that applies the breadth
+penalty. An optional parameter would have left that one silently scoring the wrong quantity, which
+is the same class of defect this ADR exists to remove.
+
+Weekly consistency moved too. It was computing per-week _rate_ differences for every outcome, so
+an intensity finding's "this repeated in 4 of 5 weeks" was agreement about frequency. It now
+measures whichever quantity the headline is about, and a week with no intensity on one side is not
+comparable rather than counted as disagreement — silence must not get a vote.
+
+**Precision is unmeasured, not assumed.** `confidenceInterval` is a band on a difference of rates
+and does not describe a severity finding, so those outcomes take `UNMEASURED_PRECISION` (0.5) and
+carry a limitation saying the range has not been worked out. Since confidence is the minimum of
+its components, this holds every severity finding below `MIN_CONFIDENCE_FOR_STRONG`: they reach
+`moderate` at best. **That ceiling is emergent rather than a rule**, which is the right shape — it
+lifts by itself when a Welch-style interval for a difference of means is added, leaving no special
+case behind to delete. Doing that interval properly needs a t-distribution rather than a normal
+approximation, for the same reason §6 already distrusts Newcombe at the extremes, and is worth
+doing deliberately rather than in passing.
+
+**Verified.** A diary with symptoms every day at 9 versus 2 — identical occurrence, seven points
+of intensity apart — no longer scores `no_clear_pattern`; one at 6 versus 5 still does. Both were
+confirmed to fail against the previous implementation. Occurrence outcomes are unchanged.

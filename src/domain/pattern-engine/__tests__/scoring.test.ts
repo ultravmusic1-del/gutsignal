@@ -6,7 +6,12 @@ import {
   MIN_MEANINGFUL_DIFFERENCE,
   scoreStatus,
 } from '../scoring';
-import type { ComparisonMetrics, ConsistencyMetrics, TrackingCompleteness } from '../types';
+import type {
+  ComparisonMetrics,
+  ConsistencyMetrics,
+  Outcome,
+  TrackingCompleteness,
+} from '../types';
 
 /**
  * Turning arithmetic into something a person is told (spec §58).
@@ -47,7 +52,11 @@ function completeness(over: Partial<TrackingCompleteness> = {}): TrackingComplet
   };
 }
 
+/** These fixtures are all occurrence-shaped; severity has its own describe block below. */
+const OCCURRENCE: Outcome = { kind: 'symptom_occurrence', symptomType: 'bloating' };
+
 const strong = () => ({
+  outcome: OCCURRENCE,
   metrics: metrics(),
   consistency: consistency(),
   trackingCompleteness: completeness(),
@@ -154,6 +163,7 @@ describe('assessConfidence — limitations', () => {
 
   it('never explains a limitation in causal or diagnostic language', () => {
     const assessment = assessConfidence({
+      outcome: OCCURRENCE,
       metrics: metrics({
         exposedCount: 5,
         controlCount: 5,
@@ -176,6 +186,7 @@ describe('scoreStatus', () => {
   it('refuses to say anything from too few observations', () => {
     // The rule spec §58 exists for: never "strong signal" because something happened twice.
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({
         exposedCount: MIN_GROUP_FOR_ANY_CLAIM - 1,
         controlCount: 20,
@@ -192,6 +203,7 @@ describe('scoreStatus', () => {
     // The exact case the comparison interval does NOT protect against: 2 of 2 against 0 of 2
     // excludes zero and looks conclusive. Counts are gated here instead.
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({
         exposedCount: 2,
         controlCount: 2,
@@ -209,6 +221,7 @@ describe('scoreStatus', () => {
 
   it('reports no clear pattern when there is plenty of data and no real difference', () => {
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({
         exposedCount: 30,
         controlCount: 30,
@@ -223,6 +236,7 @@ describe('scoreStatus', () => {
 
   it('reports a stronger recurring signal only with size, confidence and repetition', () => {
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({ exposedCount: MIN_GROUP_FOR_STRONG, controlCount: MIN_GROUP_FOR_STRONG }),
       consistency: consistency({ comparableWeeks: 5, agreeingWeeks: 5, agreementRate: 1 }),
       confidence: 0.85,
@@ -234,6 +248,7 @@ describe('scoreStatus', () => {
   it('will not call it stronger when the weeks disagree with each other', () => {
     // A difference driven by one unusual week is a much weaker claim than a repeated one.
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({ exposedCount: 30, controlCount: 30 }),
       consistency: consistency({ comparableWeeks: 5, agreeingWeeks: 2, agreementRate: 0.4 }),
       confidence: 0.85,
@@ -244,6 +259,7 @@ describe('scoreStatus', () => {
 
   it('will not call it stronger when consistency was never measurable', () => {
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({ exposedCount: 30, controlCount: 30 }),
       consistency: consistency({ comparableWeeks: 1, agreeingWeeks: 1, agreementRate: null }),
       confidence: 0.85,
@@ -254,6 +270,7 @@ describe('scoreStatus', () => {
 
   it('reports moderate for a decent sample without full confidence', () => {
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({
         exposedCount: MIN_GROUP_FOR_MODERATE,
         controlCount: MIN_GROUP_FOR_MODERATE,
@@ -267,6 +284,7 @@ describe('scoreStatus', () => {
 
   it('reports emerging for a real difference on a small but usable sample', () => {
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({
         exposedCount: MIN_GROUP_FOR_ANY_CLAIM,
         controlCount: MIN_GROUP_FOR_ANY_CLAIM,
@@ -281,6 +299,7 @@ describe('scoreStatus', () => {
   it('treats a protective association the same way as a harmful one', () => {
     // The engine reports what the logs show in both directions, not only bad news.
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({
         exposedCount: MIN_GROUP_FOR_STRONG,
         controlCount: MIN_GROUP_FOR_STRONG,
@@ -295,6 +314,7 @@ describe('scoreStatus', () => {
 
   it('is gated by the smaller group, not the larger', () => {
     const status = scoreStatus({
+      outcome: OCCURRENCE,
       metrics: metrics({ exposedCount: 200, controlCount: 3 }),
       consistency: consistency(),
       confidence: 0.9,
