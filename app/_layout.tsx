@@ -113,6 +113,16 @@ export default function RootLayout() {
                     {/* Pattern detail is read, not filled in, so it pushes rather than opening
                     as a sheet — and it takes the native header for a real back gesture and a
                     back button VoiceOver already knows how to describe. */}
+                    {/* Privacy and data (spec §97). Pushed rather than a sheet: it is read and
+                    acted on, not filled in. */}
+                    <Stack.Screen
+                      name="privacy-data"
+                      options={{
+                        headerShown: true,
+                        headerTitle: 'Privacy & data',
+                        headerBackTitle: 'You',
+                      }}
+                    />
                     <Stack.Screen
                       name="pattern/[id]"
                       options={{

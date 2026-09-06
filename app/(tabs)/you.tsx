@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
@@ -14,12 +15,14 @@ import { useTheme } from '@/theme';
 /**
  * You — profile, settings, reports, subscription, privacy (spec §18).
  *
- * Sign-out is real from Milestone 3. The remaining rows are still INFORMATION rather than
- * controls: settings screens, export and account deletion arrive at their own milestones, and
- * a tappable row that led nowhere would be the dead button the spec forbids.
+ * Sign-out has been real since Milestone 3, and Privacy & data since Milestone 15. Everything else
+ * here is still INFORMATION rather than a control — settings, subscription and reports beyond the
+ * appointment one arrive at their own milestones, and a tappable row leading nowhere is the dead
+ * button the spec forbids.
  */
 export default function YouScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { session, userId } = useAuth();
   const { flush } = useSync();
   const [signingOut, setSigningOut] = useState(false);
@@ -109,6 +112,14 @@ export default function YouScreen() {
             You will always be able to export everything you have logged, and to delete your account
             and its data from within the app.
           </Text>
+          <View style={{ height: theme.spacing.md }} />
+          <Button
+            label="Privacy & data"
+            variant="secondary"
+            size="medium"
+            haptic={false}
+            onPress={() => router.push('/privacy-data')}
+          />
         </Card>
 
         <Card elevation="flat">
