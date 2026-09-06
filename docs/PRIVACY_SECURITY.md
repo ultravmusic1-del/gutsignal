@@ -140,9 +140,10 @@ blocker under §58 rather than a documented acceptance.
 
 Listed so nobody has to discover it.
 
-- **Data export cannot leave the device** (spec §98). `buildDiaryExport()` produces the JSON and
-  CSV files and is tested, but writing and sharing them needs `expo-file-system` and
-  `expo-sharing`, which are approved and not yet installed. No control is shown until they are.
+- **Export writes to the cache directory, not documents.** An export is a copy of the whole
+  record and exists only long enough to reach the share sheet, so it is written somewhere the
+  system can reclaim rather than somewhere it lives forever (§28). Availability is checked before
+  anything is written, so a share that cannot happen leaves no copy behind.
 - **Nothing has run on a physical device.** Every protection here is verified by tests, against
   the live database, or by reading; none has been observed working on a phone.
 

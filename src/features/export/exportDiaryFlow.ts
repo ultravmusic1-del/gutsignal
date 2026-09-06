@@ -49,6 +49,22 @@ export function exportChoices(files: ExportFile[]): ExportChoice[] {
   return files.map((file) => ({ id: file.name, label: LABELS[file.name] ?? humanise(file.name) }));
 }
 
+/**
+ * The choices a screen can offer before it has read anything.
+ *
+ * The picker has to render before the diary is loaded — building the files to find out what they
+ * are called would mean reading the whole record just to draw six chips. These are therefore the
+ * known names, and a test asserts they are exactly what `buildDiaryExport` produces, so the two
+ * cannot drift apart in silence.
+ */
+export const EXPORT_CHOICES: ExportChoice[] = Object.entries(LABELS).map(([id, label]) => ({
+  id,
+  label,
+}));
+
+/** The complete record, and the sensible default. */
+export const DEFAULT_EXPORT_CHOICE = 'gutsignal-diary.json';
+
 export type ExportPorts = {
   /** Reads the diary and renders it. Everything this touches is the user's own local data. */
   buildFiles: () => Promise<ExportFile[]>;
@@ -60,14 +76,10 @@ export type ExportPorts = {
 };
 
 export type ExportFailureReason =
-  | 'nothing_to_export'
-  | 'unknown_file'
-  | 'sharing_unavailable'
-  | 'failed';
+  'nothing_to_export' | 'unknown_file' | 'sharing_unavailable' | 'failed';
 
 export type ExportResult =
-  | { ok: true }
-  | { ok: false; reason: ExportFailureReason; message: string };
+  { ok: true } | { ok: false; reason: ExportFailureReason; message: string };
 
 /**
  * Messages are written for the person holding the phone, and say what to do rather than what went
@@ -79,7 +91,8 @@ const MESSAGES: Record<ExportFailureReason, string> = {
   unknown_file: 'That file is no longer part of the export. Choose another and try again.',
   sharing_unavailable:
     'This device cannot share files, so there is nowhere to send the export. Nothing has been saved.',
-  failed: 'The export could not be finished. Your entries are safe on this device — nothing was lost.',
+  failed:
+    'The export could not be finished. Your entries are safe on this device — nothing was lost.',
 };
 
 const failure = (reason: ExportFailureReason): ExportResult => ({
@@ -88,10 +101,7 @@ const failure = (reason: ExportFailureReason): ExportResult => ({
   message: MESSAGES[reason],
 });
 
-export async function runDiaryExport(
-  ports: ExportPorts,
-  fileName: string
-): Promise<ExportResult> {
+export async function runDiaryExport(ports: ExportPorts, fileName: string): Promise<ExportResult> {
   try {
     const files = await ports.buildFiles();
 

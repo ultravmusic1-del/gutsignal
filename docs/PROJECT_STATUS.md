@@ -150,11 +150,17 @@ the gate works on a fork's pull request exactly as on a branch.
       running them needs a device or simulator, which is Bucket C.** Writing them now means the
       first device session has a script instead of improvisation
 
-### A6. Export delivery (dependencies already approved)
+### A6. Export delivery — **DONE**
 
-- [ ] Install `expo-file-system` + `expo-sharing` via `npx expo install`, wire the control on
-      Privacy & Data. The domain layer (`buildDiaryExport`) is done and tested; only delivery is
-      missing. Closes spec §98
+- [x] `expo-file-system` and `expo-sharing` installed via `npx expo install`, with the
+      `expo-sharing` config plugin registered
+- [x] A picker on Privacy & Data offering all six files — the complete JSON record and the five
+      per-table CSVs. iOS shares one URL, so rather than adding a zip dependency the user chooses;
+      the default is everything, one tap
+- [x] Written to the **cache** directory, and only after checking the device can share. An export
+      that cannot be delivered leaves no copy of the diary behind (§28)
+- [x] A test pins the picker list to what `buildDiaryExport` actually returns, so a file added
+      later cannot become unreachable from the UI
 
 ### A7. Documentation consolidation (review §15)
 

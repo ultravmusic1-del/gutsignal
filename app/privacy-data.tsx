@@ -3,6 +3,8 @@ import { Alert, View } from 'react-native';
 
 import { Button, Card, Chip, Screen, Text, TextField } from '@/components/ui';
 import { accountDeletionExplainer, isDeletionConfirmed } from '@/features/account/deleteAccount';
+import { DEFAULT_EXPORT_CHOICE, EXPORT_CHOICES } from '@/features/export/exportDiaryFlow';
+import { useExportDiary } from '@/features/export/useExportDiary';
 import { useDeleteAccount } from '@/features/account/useDeleteAccount';
 import {
   REPORT_PERIOD_DAYS,
@@ -14,10 +16,12 @@ import { useTheme } from '@/theme';
 /**
  * Privacy & Data (spec §97).
  *
- * The home for everything a person does with their own record rather than to it. Reports and
- * account deletion are here; file export is not, because it needs `expo-file-system` and
- * `expo-sharing` and a control that leads nowhere is the dead button `CLAUDE.md` §57 forbids.
- * What the app cannot do yet is said in words instead of shown as a button.
+ * The home for everything a person does with their own record rather than to it: a report to take
+ * to an appointment, an export to keep, and deletion.
+ *
+ * The three are ordered by what they cost. A report produces something, an export copies
+ * something, and deletion destroys something — so deletion is last, past everything a person might
+ * actually have come here for.
  *
  * **Deletion is real, and it is last on the screen for a reason.** It is irreversible and it is
  * the only control here that destroys anything, so it sits below everything a person might have
@@ -27,6 +31,16 @@ export default function PrivacyAndDataScreen() {
   const theme = useTheme();
   const [days, setDays] = useState<ReportPeriodDays>(30);
   const createReport = useCreateReport();
+
+  const [exportChoice, setExportChoice] = useState<string>(DEFAULT_EXPORT_CHOICE);
+  const exportDiary = useExportDiary();
+
+  const exportError =
+    exportDiary.data !== undefined && !exportDiary.data.ok
+      ? exportDiary.data.message
+      : exportDiary.isError
+        ? 'The export could not be finished. Your entries are safe on this device.'
+        : null;
 
   const [typed, setTyped] = useState('');
   const deleteAccount = useDeleteAccount();
@@ -123,15 +137,47 @@ export default function PrivacyAndDataScreen() {
           </View>
         </Card>
 
-        <Card elevation="flat">
-          <View style={{ gap: theme.spacing.xs }}>
-            <Text variant="overline" color="secondary">
-              NOT HERE YET
-            </Text>
-            <Text variant="body" color="secondary">
-              Downloading your full diary as a file is being built. Until it is, it is not listed
-              here rather than shown as a button that would not work.
-            </Text>
+        {/* Export (spec §98). One file at a time, because iOS shares one URL — so rather than a
+            zip dependency the user picks which. The default is everything. */}
+        <Card>
+          <View style={{ gap: theme.spacing.md }}>
+            <View style={{ gap: theme.spacing.xxs }}>
+              <Text variant="cardTitle">Export your diary</Text>
+              <Text variant="body" color="secondary">
+                A copy of what you have logged, to keep or to take somewhere else. Every entry
+                carries both the exact moment and your own local date and time, so nothing has to be
+                guessed at later.
+              </Text>
+            </View>
+
+            <View style={{ gap: theme.spacing.xs }}>
+              <Text variant="overline" color="secondary">
+                WHAT TO EXPORT
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs }}>
+                {EXPORT_CHOICES.map((choice) => (
+                  <Chip
+                    key={choice.id}
+                    label={choice.label}
+                    selected={exportChoice === choice.id}
+                    onPress={() => setExportChoice(choice.id)}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <Button
+              label="Export"
+              variant="secondary"
+              loading={exportDiary.isPending}
+              onPress={() => exportDiary.mutate(exportChoice)}
+            />
+
+            {exportError !== null ? (
+              <Text variant="caption" color="danger">
+                {exportError}
+              </Text>
+            ) : null}
           </View>
         </Card>
 

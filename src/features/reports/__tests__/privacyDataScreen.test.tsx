@@ -38,6 +38,22 @@ const mockDeleteState: { isPending: boolean; isError: boolean; data: unknown } =
   data: undefined,
 };
 
+const mockExport = jest.fn();
+const mockExportState: { isPending: boolean; isError: boolean; data: unknown } = {
+  isPending: false,
+  isError: false,
+  data: undefined,
+};
+
+jest.mock('@/features/export/useExportDiary', () => ({
+  useExportDiary: () => ({
+    mutate: mockExport,
+    isPending: mockExportState.isPending,
+    isError: mockExportState.isError,
+    data: mockExportState.data,
+  }),
+}));
+
 jest.mock('@/features/account/useDeleteAccount', () => ({
   useDeleteAccount: () => ({
     mutate: mockDelete,
@@ -56,6 +72,10 @@ beforeEach(() => {
   mockMutate.mockClear();
   mockState.isPending = false;
   mockState.isError = false;
+  mockExport.mockClear();
+  mockExportState.isPending = false;
+  mockExportState.isError = false;
+  mockExportState.data = undefined;
   mockDelete.mockClear();
   mockDeleteState.isPending = false;
   mockDeleteState.isError = false;
@@ -126,20 +146,53 @@ describe('when something goes wrong', () => {
   });
 });
 
-describe('what is deliberately absent', () => {
-  // §57: a row that leads nowhere is worse than no row. File export still needs two dependencies
-  // that are not installed. Deletion is no longer in this category — it works.
-  it('offers no export control', async () => {
+/**
+ * Exporting a diary (spec §98).
+ *
+ * The flow itself is tested in `features/export/__tests__/exportDiaryFlow.test.ts`. What matters
+ * here is that the screen offers every file the export can produce, defaults to the complete
+ * record, and reports a failure without claiming something was saved.
+ */
+describe('exporting a diary', () => {
+  it('offers the complete record and each spreadsheet', async () => {
     const view = await renderScreen();
 
-    expect(view.queryByRole('button', { name: /export/i })).toBeNull();
+    expect(view.getByText(/Everything \(JSON\)/i)).toBeTruthy();
+    expect(view.getByText('Meals')).toBeTruthy();
+    expect(view.getByText('Symptoms')).toBeTruthy();
+    expect(view.getByText('Bowel movements')).toBeTruthy();
   });
 
-  it('says in words what is not built yet, rather than leaving a silence', async () => {
+  it('exports the complete record without the user choosing anything', async () => {
     const view = await renderScreen();
 
-    expect(view.getByText(/NOT HERE YET/)).toBeTruthy();
-    expect(view.getByText(/being built/i)).toBeTruthy();
+    await press(view, 'Export');
+
+    expect(mockExport).toHaveBeenCalledWith('gutsignal-diary.json');
+  });
+
+  it('exports the file the user picked instead', async () => {
+    const view = await renderScreen();
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Symptoms'));
+    });
+    await press(view, 'Export');
+
+    expect(mockExport).toHaveBeenCalledWith('gutsignal-symptoms.csv');
+  });
+
+  // A failed export must not imply a copy is sitting somewhere.
+  it('shows the failure message the flow produced', async () => {
+    mockExportState.data = {
+      ok: false,
+      reason: 'sharing_unavailable',
+      message: 'This device cannot share files. Nothing has been saved.',
+    };
+
+    const view = await renderScreen();
+
+    expect(view.getByText(/Nothing has been saved/i)).toBeTruthy();
   });
 });
 

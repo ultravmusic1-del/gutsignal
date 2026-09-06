@@ -1,6 +1,9 @@
-import type { ExportFile } from '@/domain/export/exportDiary';
+import { buildDiaryExport, type ExportFile } from '@/domain/export/exportDiary';
+import type { LogSet } from '@/domain/pattern-engine/observations';
 
 import {
+  DEFAULT_EXPORT_CHOICE,
+  EXPORT_CHOICES,
   exportChoices,
   runDiaryExport,
   type ExportPorts,
@@ -152,5 +155,32 @@ describe('running an export', () => {
       ok: false,
       reason: 'failed',
     });
+  });
+});
+
+/**
+ * The picker's list and the exporter's output must be the same set.
+ *
+ * The screen renders its chips before reading anything, so the labels are declared rather than
+ * derived. That is a duplication, and this is the test that stops it becoming a divergence: a file
+ * added to `buildDiaryExport` without a label would otherwise be unreachable from the UI, and a
+ * label left behind after a file was removed would offer an export that cannot be produced.
+ */
+describe('the offered choices match what the export actually produces', () => {
+  const EMPTY: LogSet = { meals: [], symptoms: [], bowel: [], wellbeing: [], context: [] };
+
+  it('offers exactly the files buildDiaryExport returns, in the same order', () => {
+    const produced = buildDiaryExport(EMPTY, {
+      generatedAt: new Date('2026-09-06T00:00:00.000Z'),
+      userId: 'user-1',
+      appVersion: '0.1.0',
+    }).map((file) => file.name);
+
+    expect(EXPORT_CHOICES.map((choice) => choice.id)).toEqual(produced);
+  });
+
+  it('defaults to the complete record', () => {
+    expect(EXPORT_CHOICES.some((choice) => choice.id === DEFAULT_EXPORT_CHOICE)).toBe(true);
+    expect(DEFAULT_EXPORT_CHOICE).toMatch(/\.json$/);
   });
 });
