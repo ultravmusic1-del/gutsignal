@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 24** · Update the date and loop number every
+Last updated: **2026-09-06, loop 25** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,7 +41,7 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 57 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 60 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
 | Tests             | **984 passing**, 60 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
@@ -255,34 +255,42 @@ been buildable is the part that has to exist **before** anything depends on it.
   Everywhere else must keep using `syncNow` and carry on, since not waiting on the network is the
   whole point of the offline design.
 
-**Pick up here:**
+**Also done in loop 25:**
 
-**The analytics work of M16 is finished.** Every event in `events.ts` has a caller except
-`account_deleted`, which waits on a deletion flow that does not exist — and that is enforced, not
-remembered: `callSites.test.ts` fails on any declared event with no call site unless it is listed
-with a written reason, and fails again if a reason outlives its event.
-
-**Pick up here:**
-
-**The Sentry seam is built** (loop 24). `services/monitoring/scrub.ts` + 18 tests is a
-`beforeSend`-shaped function an SDK can be handed directly; `monitoring.ts` + 10 tests is the
-`captureError` boundary, wired to the root `ErrorBoundary` and to a boot whose database will not
-open. No SDK is imported and none is needed — the sink is null until a DSN exists, so call sites
-are already correct.
-
-**Read the asymmetry before changing it.** Structured fields are an allowlist: `scrubEvent` builds
-its result field by field, so a new field is dropped by default rather than forwarded by default.
-Headers, request bodies, breadcrumb `data` and `extra` are dropped whole. Free text is redacted by
-pattern and **that is explicitly not a guarantee** — there is a test named
-`DOES NOT catch health content written as an ordinary sentence` to stop anyone assuming it is.
+- **The dependency audit** — the one M16 item that was not blocked. 14 moderate, 0 high, 0
+  critical, from two root advisories, and **no fix applied**: `npm audit fix` offers _downgrades_
+  (`expo-router` 57→5, `expo-splash-screen` 57→55, both semver-major) that would break an SDK 57
+  install `expo install --check` reports as correct. Exposure was traced rather than assumed —
+  `decode-uri-component` is on a real runtime path (a `gutsignal://` scheme is registered, so the
+  router parses incoming URLs), `uuid` is build-time only. **ADR-0039** records it and says
+  explicitly that it covers moderate findings only; a high or critical one is a §58 blocker.
+- **`docs/PRIVACY_SECURITY.md`** — a §47-expected document that did not exist. What the app holds
+  and where, the analytics wall, what the crash scrubber does and does not promise, local account
+  isolation, secrets, the audit. **Its last section lists what is NOT protected yet**, which is the
+  reason to read it.
+- **`pattern_findings` RLS coverage** in `supabase/tests/rls_isolation.sql`, closing the §14 gap the
+  migration left in loop 11. Guarded on `to_regclass`, because the migration is unapplied: a skip
+  raises a NOTICE naming the migration, and the final summary says which of the two outcomes
+  happened. **The SQL has never been executed** — no live project, no local Postgres. Expect a typo
+  on its first real run; the caveat is at the top of the file.
 
 **Pick up here:**
 
-1. **Account deletion (spec §97, a §58 blocker).** `deleteLocalDatabase()` already exists in
-   `services/db/database.ts` and nothing calls it; `wipeLocalDataExcept(db, null)` clears
-   everything without touching the file. The **server** cascade needs the paused database, so the
-   local half and the confirmation flow can be built now and the Edge Function added later — but
-   do not ship a delete button whose server half does nothing (§57).
+1. **Account deletion (spec §97, a §58 blocker).** Half-blocked, and worth reading §97 before
+   starting: the flow is explain → confirm → reauthenticate → delete rows → delete Storage → clear
+   local → unlink identity → log out, plus a separate note that deleting the account does **not**
+   cancel an Apple subscription.
+   The local half exists (`wipeLocalDataExcept(db, null)`, `deleteLocalDatabase()`). The server half
+   needs a service-role Edge Function to delete the auth user, and there is no `supabase/functions/`
+   directory yet — that part cannot be deployed or tested while the project is paused.
+   **Do not ship the button until the server half works.** A "Delete account" control that only
+   clears the device is not a slow version of deletion, it is a false claim, and §57 rules it out.
+   The honest slice available now is the orchestration and its ordering — server first, local
+   second, sign-out last, so a failed server call leaves everything intact and retryable — behind an
+   injected interface, with tests. Judge whether that is worth building before the thing it
+   orchestrates exists; waiting for the database may be the better call.
+2. **M15 (reports and export)** is fully unblocked and is probably the better use of a loop while
+   the database is down. See "After that, in order" below.
 
 Blocked in M16 until the owner acts: the RLS audit (needs the database restored), **installing the
 Sentry SDK behind the scrubber** (needs a DSN — the scrubber itself is done and tested), and the
@@ -393,6 +401,7 @@ Append one line per loop. Keep it short and factual.
 | 22   | `sync_failed` classified into four safe words, never a message; onboarding funnel from one frame.       | 937 tests, verify green, bundle builds |
 | 23   | The last four events: log sheet open/dismiss and timeline search/filter. Every event now has a caller.  | 955 tests, verify green, bundle builds |
 | 24   | Crash-report scrubber (§30): allowlisted fields, redacted text, and honest about which is which.        | 984 tests, verify green, bundle builds |
+| 25   | Dependency audit (14 moderate, no fix — ADR-0039), PRIVACY_SECURITY.md, pattern_findings RLS cover.     | 984 tests, verify green                |
 
 ---
 
@@ -487,6 +496,17 @@ One consequence worth knowing: sign-out now waits on the network before showing 
 so on a bad connection the button spins for as long as a sync attempt takes. It is the only place
 in the app that waits on the network at all, and it does so because it is the last moment the
 person whose entries these are is still present.
+
+#### 🟢 Two moderate advisories are accepted, on purpose
+
+The dependency audit found 14 moderate issues, 0 high, 0 critical. **I did not fix them**, and
+ADR-0039 explains why: every fix npm offers is a _downgrade_ that would break the SDK 57 install.
+`expo-router` would go from 57.0.19 to 5.1.11.
+
+You do not need to do anything. It is here so the number does not surprise you if you run
+`npm audit` yourself: 14 sounds alarming and resolves to two upstream packages Expo has to bump.
+Full analysis, including which one is actually reachable at runtime, is in
+`docs/PRIVACY_SECURITY.md` §6.
 
 #### 🟡 Crash reports: what the scrubber can and cannot promise
 
