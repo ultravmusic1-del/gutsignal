@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 23** · Update the date and loop number every
+Last updated: **2026-09-06, loop 24** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 55 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 57 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **955 passing**, 58 suites                                       |
+| Tests             | **984 passing**, 60 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -264,19 +264,30 @@ with a written reason, and fails again if a reason outlives its event.
 
 **Pick up here:**
 
-1. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
-   M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
-   report may contain — behind the same sink shape as analytics, and test it against §30's list.
-   The SDK slots in behind it when the owner supplies a DSN.
-2. **Account deletion (spec §97, a §58 blocker).** `deleteLocalDatabase()` already exists in
+**The Sentry seam is built** (loop 24). `services/monitoring/scrub.ts` + 18 tests is a
+`beforeSend`-shaped function an SDK can be handed directly; `monitoring.ts` + 10 tests is the
+`captureError` boundary, wired to the root `ErrorBoundary` and to a boot whose database will not
+open. No SDK is imported and none is needed — the sink is null until a DSN exists, so call sites
+are already correct.
+
+**Read the asymmetry before changing it.** Structured fields are an allowlist: `scrubEvent` builds
+its result field by field, so a new field is dropped by default rather than forwarded by default.
+Headers, request bodies, breadcrumb `data` and `extra` are dropped whole. Free text is redacted by
+pattern and **that is explicitly not a guarantee** — there is a test named
+`DOES NOT catch health content written as an ordinary sentence` to stop anyone assuming it is.
+
+**Pick up here:**
+
+1. **Account deletion (spec §97, a §58 blocker).** `deleteLocalDatabase()` already exists in
    `services/db/database.ts` and nothing calls it; `wipeLocalDataExcept(db, null)` clears
    everything without touching the file. The **server** cascade needs the paused database, so the
    local half and the confirmation flow can be built now and the Edge Function added later — but
    do not ship a delete button whose server half does nothing (§57).
 
-Blocked in M16 until the owner acts: the RLS audit (needs the database restored), the Sentry
-scrubber (needs a DSN), and the dependency audit's follow-up (`npm audit` runs, but any fix
-touching a pinned Expo package needs `npx expo install --check` and a bundle).
+Blocked in M16 until the owner acts: the RLS audit (needs the database restored), **installing the
+Sentry SDK behind the scrubber** (needs a DSN — the scrubber itself is done and tested), and the
+dependency audit's follow-up (`npm audit` runs, but any fix touching a pinned Expo package needs
+`npx expo install --check` and a bundle).
 
 Note on the empty state: it is the case most users see, and it is the only thing standing between
 a new user and a screen that looks broken. If you change `readinessCopy`, re-read §17 — the copy
@@ -381,6 +392,7 @@ Append one line per loop. Keep it short and factual.
 | 21   | `useScreenView` — once per focus, waits for its data. Wired to 4 events. Lint now 0 errors, 0 warnings. | 906 tests, verify green, bundle builds |
 | 22   | `sync_failed` classified into four safe words, never a message; onboarding funnel from one frame.       | 937 tests, verify green, bundle builds |
 | 23   | The last four events: log sheet open/dismiss and timeline search/filter. Every event now has a caller.  | 955 tests, verify green, bundle builds |
+| 24   | Crash-report scrubber (§30): allowlisted fields, redacted text, and honest about which is which.        | 984 tests, verify green, bundle builds |
 
 ---
 
@@ -475,6 +487,23 @@ One consequence worth knowing: sign-out now waits on the network before showing 
 so on a bad connection the button spins for as long as a sync attempt takes. It is the only place
 in the app that waits on the network at all, and it does so because it is the last moment the
 person whose entries these are is still present.
+
+#### 🟡 Crash reports: what the scrubber can and cannot promise
+
+When you supply a Sentry DSN, hand it `scrubEvent` as `beforeSend` — that is the shape it was
+written in. Two things to know before you do:
+
+- **Structured fields are safe by construction.** Headers, request bodies, breadcrumb data and
+  arbitrary extras never leave, because the scrubber builds its output field by field rather than
+  deleting from the input. Only the user id is attached — no email, username or IP.
+- **Free text is best effort.** Tokens, addresses, ids and pasted rows are stripped. A sentence
+  like "could not save: user reported bloating after dairy" is not, and cannot be. There is a test
+  asserting that limitation rather than papering over it.
+
+The practical consequence is a rule for us rather than for the scrubber: **never interpolate user
+content into an error message.** If you would like the free-text half tightened further — dropping
+messages entirely and keeping only the error type and the operation — say so. It is a small change,
+and it costs real diagnostic value, which is why I did not make that call on your behalf.
 
 #### 🟡 log_sheet_dismissed is reasoned, not observed
 
