@@ -11,12 +11,17 @@
 -- paths, so it can be run repeatedly against a non-production project.
 --
 -- Run:  psql "$DATABASE_URL" -f supabase/tests/rls_isolation.sql
--- Pass: final notice reads "RLS isolation: ALL CHECKS PASSED"
+-- Pass: final notice reads "RLS isolation: ALL CHECKS PASSED". Read the rest of that line —
+--       it names any table that was skipped because its migration is not applied yet.
 -- Fail: raises an exception naming the check that failed
+
+-- NOTE (2026-09-06): the pattern_findings section has never been executed. The Supabase project
+-- has been paused since it was written, and there is no local Postgres on the Windows dev machine,
+-- so it is structurally reviewed but unrun. Expect to fix a typo on its first real run.
 
 begin;
 
-do $$
+do $
 declare
   user_a uuid := '11111111-1111-4111-8111-111111111111';
   user_b uuid := '22222222-2222-4222-8222-222222222222';
@@ -29,6 +34,8 @@ declare
   log_b uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   meal_a uuid := 'aaaa1111-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   meal_b uuid := 'bbbb2222-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  findings_present   boolean := to_regclass('public.pattern_findings') is not null;
+  anon_tables        text[];
 begin
   -- ---------------------------------------------------------------------
   -- Fixtures. Inserting into auth.users also exercises the sign-up trigger.
@@ -584,16 +591,103 @@ begin
   end if;
 
   -- ---------------------------------------------------------------------
+  -- pattern_findings (spec §86). Derived data, but every column is health content: a factor
+  -- label is a food and an outcome is a symptom, so it is isolated exactly like a diary row.
+  --
+  -- Guarded because the migration may not be applied yet. A skip is announced loudly rather
+  -- than passing quietly — a security check that silently covers nothing is worse than none,
+  -- and the final summary below repeats whether this ran.
+  -- ---------------------------------------------------------------------
+  if not findings_present then
+    raise notice 'SKIPPED: public.pattern_findings does not exist. Apply %',
+      '20260906090000_pattern_findings.sql, then re-run — this table is NOT yet covered.';
+  else
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', null, true);
+
+    insert into public.pattern_findings (
+      id, user_id, engine_version, factor_key, factor_label, factor_source,
+      outcome_kind, analysis_start, analysis_end, window_key, status, confidence,
+      exposed_count, control_count, unknown_count, absolute_difference,
+      metrics, consistency, tracking_completeness, generated_at
+    )
+    values (
+      gen_random_uuid(), user_b, '1.0.0', 'meal_item:dairy', 'Dairy', 'meal_item',
+      'any_symptom', current_date - 30, current_date, 'later_same_day', 'moderate', 0.6,
+      10, 12, 3, 0.25,
+      '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, now()
+    );
+
+    perform set_config('role', 'authenticated', true);
+    perform set_config(
+      'request.jwt.claims',
+      json_build_object('sub', user_a, 'role', 'authenticated')::text,
+      true
+    );
+
+    -- 1. SELECT isolation.
+    select count(*) into visible_count from public.pattern_findings;
+    if visible_count <> 0 then
+      raise exception 'FAILED: user A sees % rows in pattern_findings, expected none',
+        visible_count;
+    end if;
+
+    -- 2. UPDATE isolation. `status` rather than `note` — this table has no free-text column,
+    -- which is itself deliberate.
+    update public.pattern_findings set status = 'stronger_recurring_signal' where user_id = user_b;
+    get diagnostics affected_count = row_count;
+    if affected_count <> 0 then
+      raise exception 'FAILED: user A updated % pattern_findings rows belonging to user B',
+        affected_count;
+    end if;
+
+    -- 3. DELETE isolation.
+    delete from public.pattern_findings where user_id = user_b;
+    get diagnostics affected_count = row_count;
+    if affected_count <> 0 then
+      raise exception 'FAILED: user A deleted % pattern_findings rows belonging to user B',
+        affected_count;
+    end if;
+
+    -- 4. INSERT impersonation refused.
+    insert_was_blocked := false;
+    begin
+      insert into public.pattern_findings (
+        id, user_id, engine_version, factor_key, factor_label, factor_source,
+        outcome_kind, analysis_start, analysis_end, window_key, status, confidence,
+        exposed_count, control_count, unknown_count, absolute_difference,
+        metrics, consistency, tracking_completeness, generated_at
+      )
+      values (
+        gen_random_uuid(), user_b, '1.0.0', 'meal_item:dairy', 'Dairy', 'meal_item',
+        'any_symptom', current_date - 30, current_date, 'later_same_day', 'moderate', 0.6,
+        10, 12, 3, 0.25,
+        '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, now()
+      );
+    exception when others then insert_was_blocked := true;
+    end;
+    if not insert_was_blocked then
+      raise exception 'FAILED: user A inserted a pattern finding owned by user B';
+    end if;
+  end if;
+
+  -- ---------------------------------------------------------------------
   -- Act as an unauthenticated client.
   -- ---------------------------------------------------------------------
   perform set_config('role', 'anon', true);
   perform set_config('request.jwt.claims', null, true);
 
-  foreach table_name in array array[
+  anon_tables := array[
     'profiles', 'user_preferences', 'user_symptom_preferences', 'user_suspected_factors',
     'symptom_logs', 'meal_logs', 'meal_items', 'meal_tags',
     'bowel_logs', 'wellbeing_logs', 'context_logs'
-  ]
+  ];
+
+  if findings_present then
+    anon_tables := anon_tables || 'pattern_findings';
+  end if;
+
+  foreach table_name in array anon_tables
   loop
     execute format('select count(*) from public.%I', table_name) into visible_count;
     if visible_count <> 0 then
@@ -601,7 +695,11 @@ begin
     end if;
   end loop;
 
-  raise notice 'RLS isolation: ALL CHECKS PASSED';
+  if findings_present then
+    raise notice 'RLS isolation: ALL CHECKS PASSED (including pattern_findings)';
+  else
+    raise notice 'RLS isolation: ALL CHECKS PASSED — but pattern_findings was NOT covered';
+  end if;
 end;
 $$;
 
