@@ -13,7 +13,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:ci": "jest --ci --runInBand",
+    "test:ci": "jest --ci --runInBand --coverage",
     "test:watch": "jest --watch",
     "doctor": "npx expo-doctor",
     "verify": "npm run verify:fast",
@@ -85,6 +85,44 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/.expo/"
-    ]
+    ],
+    "coverageThreshold": {
+      "src/domain/pattern-engine/": {
+        "statements": 95,
+        "branches": 88,
+        "functions": 95,
+        "lines": 97
+      },
+      "src/domain/patterns/": {
+        "statements": 95,
+        "branches": 87,
+        "functions": 98,
+        "lines": 98
+      },
+      "src/services/sync/": {
+        "statements": 88,
+        "branches": 80,
+        "functions": 77,
+        "lines": 88
+      },
+      "src/services/db/": {
+        "statements": 74,
+        "branches": 38,
+        "functions": 84,
+        "lines": 73
+      },
+      "src/services/auth/": {
+        "statements": 28,
+        "branches": 55,
+        "functions": 12,
+        "lines": 26
+      },
+      "src/features/account/": {
+        "statements": 55,
+        "branches": 35,
+        "functions": 35,
+        "lines": 55
+      }
+    }
   }
 }
