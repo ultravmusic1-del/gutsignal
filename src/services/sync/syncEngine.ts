@@ -289,15 +289,36 @@ export function createSyncEngine({
       reasons.push(...pushResult.reasons);
     }
 
-    // One reason for the whole run, not one per row: fifty rows failing behind a single expired
-    // session is one problem, and fifty events would say otherwise.
-    result.failureReason = dominantFailureReason(reasons);
-
+    // Each entity's pull is isolated, exactly as its push is.
+    //
+    // A page the schema rejects throws by design — `logEntities.ts` validates server rows so a
+    // partially applied migration surfaces as a sync failure rather than as `undefined` reaching
+    // the pattern engine months later. That throw used to leave this loop and reject `syncNow()`
+    // entirely, which had three consequences, none of them visible:
+    //
+    //   * the run reported nothing at all, so a pass that had already pushed fifty rows
+    //     successfully lost that result along with the error
+    //   * every entity after the failing one was skipped, so one bad page of meals stopped
+    //     symptoms, bowel, wellbeing and context from pulling at all
+    //   * `SyncProvider` catches, so nothing was reported — no `sync_failed`, no reason, and a
+    //     user told exactly nothing
+    //
+    // Caught here, a bad page costs its own entity one pass and nothing else. The cursor is not
+    // advanced on the way out, so the same page is retried rather than skipped.
     for (const entity of entities) {
-      const pullResult = await pullEntity(entity);
-      result.pulled += pullResult.pulled;
-      result.skipped += pullResult.skipped;
+      try {
+        const pullResult = await pullEntity(entity);
+        result.pulled += pullResult.pulled;
+        result.skipped += pullResult.skipped;
+      } catch (error) {
+        reasons.push(classifySyncFailure(error));
+      }
     }
+
+    // One reason for the whole run, not one per row: fifty rows failing behind a single expired
+    // session is one problem, and fifty events would say otherwise. Computed after the pulls so a
+    // pull failure is included rather than reported as a clean run.
+    result.failureReason = dominantFailureReason(reasons);
 
     return result;
   }

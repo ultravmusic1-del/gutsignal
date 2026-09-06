@@ -118,7 +118,7 @@ the gate works on a fork's pull request exactly as on a branch.
   | ---------------------------- | ----: | -----: | ----: | ----: |
   | `src/domain/pattern-engine/` |  97.6 |   90.3 |  98.0 |  98.7 |
   | `src/domain/patterns/`       |  98.0 |   89.4 | 100.0 | 100.0 |
-  | `src/services/sync/`         |  90.0 |   83.2 |  79.2 |  90.6 |
+  | `src/services/sync/`         |  91.8 |   83.9 |  79.2 |  92.7 |
   | `src/services/db/`           |  76.1 |   40.9 |  86.7 |  75.3 |
   | `src/services/auth/`         |  29.8 |   57.9 |  12.5 |  27.7 |
   | `src/features/account/`      |  56.5 |   37.5 |  37.5 |  56.5 |
@@ -132,12 +132,15 @@ the gate works on a fork's pull request exactly as on a branch.
 
 - [ ] **Raise `services/auth` deliberately.** Its floor is honest but low. The right cover for it
       is the device pass and the E2E flows, not more mocks — so it should rise as those land,
-      rather than by adding unit tests that prove nothing
-- [ ] Timezone matrix as real tests: Bahrain→London, London→New York, DST start/end, 23:59 and
-      00:01 logs, timezone change while offline, entry edited in a second timezone
-- [ ] Destructive-path tests that need no device: malformed server row, schema mismatch, corrupt
-      outbox JSON, 429/401/500 responses, network loss mid-batch, 1,000-entry outbox,
-      same record edited on two devices, offline delete vs remote edit
+- [x] **Timezone matrix — DONE.** `pattern-engine/__tests__/timezones.test.ts` joins the write path
+      to the read path: same instant in two zones, a Bahrain→London move mid-diary, the 23-hour and
+      25-hour DST days, and a meal-only day staying unknown. Instants chosen so the UTC and local
+      dates disagree on every day — an earlier draft passed while a UTC-grouping mutation was
+      caught by only one of ten tests
+- [x] **Destructive paths — DONE.** `services/sync/__tests__/destructive.test.ts`: an unreadable
+      server page, a corrupt outbox payload, a 400-entry backlog, and the same record edited in two
+      places. **Writing them found a real defect** — a failed pull rejected the whole run, skipped
+      every remaining entity and was swallowed silently by `SyncProvider`. Fixed in ADR-0045
 - [ ] Assert report semantics match Insights semantics, and export semantics match Timeline
 
 ### A4. Diagnostics and provenance (review §23–24) — **DONE**

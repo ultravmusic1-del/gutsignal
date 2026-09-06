@@ -1274,3 +1274,51 @@ doing deliberately rather than in passing.
 **Verified.** A diary with symptoms every day at 9 versus 2 — identical occurrence, seven points
 of intensity apart — no longer scores `no_clear_pattern`; one at 6 versus 5 still does. Both were
 confirmed to fail against the previous implementation. Occurrence outcomes are unchanged.
+
+---
+
+## ADR-0045 — A failed pull costs one entity one pass, and nothing else
+
+**Status:** Accepted · **Date:** 2026-09-06
+
+**Context.** Found by writing the destructive-path tests the review asked for (§29), not by
+reading. `pushEntity` isolates failures per row and reports a reason; `pullEntity` had no error
+handling at all.
+
+That mattered because a pull is _designed_ to throw. `logEntities.ts` validates every server row
+so a partially applied migration surfaces as a sync failure rather than as `undefined` reaching
+the pattern engine months later — its own docstring says errors are thrown "because that is the
+contract the engine's backoff is built on". The engine had no such contract for pulls.
+
+Three consequences, none of them visible from inside the app:
+
+- **The run reported nothing.** `runOnce` rejected, so a pass that had already pushed fifty rows
+  successfully lost that result along with the error.
+- **Every entity after the failing one was skipped.** One bad page of meals stopped symptoms,
+  bowel, wellbeing and context from pulling at all — and the next run would fail the same way, so
+  the outage was open-ended rather than transient.
+- **Nobody was told.** `SyncProvider` catches the rejection with a bare `catch {}`, so
+  `reportFailure` never ran: no `sync_failed` event, no reason, no message. A user with a
+  permanently half-syncing device would see a working app.
+
+**Alternatives considered.** (a) Let it propagate and handle it in `SyncProvider`. (b) Return a
+result object from `pullEntity` instead of throwing. (c) Catch per entity inside `runOnce`, and
+fold the failure into the run's reason.
+
+**Reason.** (c).
+
+(a) puts the decision in the React layer, which is exactly where the engine is designed not to
+need it — the engine is framework-free so it can move to the Edge runtime later (risk R-09), and a
+`SyncProvider` that knows how to recover a pull is a `SyncProvider` that has to move with it.
+
+(b) would make every entity implementation responsible for classifying its own failures, which is
+the duplication `classifySyncFailure` exists to remove.
+
+**Consequences.** A bad page now costs its own entity one pass and nothing else. The cursor is not
+advanced on the way out, so the page is retried rather than skipped — a cursor moved past rows
+that were never applied would turn a transient server fault into permanent, silent data loss.
+
+`failureReason` is computed **after** the pulls rather than between push and pull, so a pull
+failure is reported instead of being recorded as a clean run.
+
+**Verified** by reverting the fix: three of the nine destructive tests fail without it.
