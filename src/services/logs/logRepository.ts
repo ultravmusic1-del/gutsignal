@@ -16,7 +16,7 @@
 
 import type { LogSource } from '@/domain/logs/source';
 import { buildOccurrence, type Occurrence } from '@/domain/time/occurrence';
-import type { SqlBindValue, SqlDatabase } from '@/services/db/sqlite';
+import type { SqlBindValue, SqlDatabase, SqlStatements } from '@/services/db/sqlite';
 import { resolveIncoming } from '@/services/sync/merge';
 import { enqueue } from '@/services/sync/outbox';
 import type { IdGenerator } from '@/utils/id';
@@ -86,7 +86,7 @@ export function fromBoolean(value: unknown): boolean {
  * column from being silently dropped on write.
  */
 async function upsertRow(
-  db: SqlDatabase,
+  db: SqlStatements,
   tableName: string,
   row: Record<string, unknown>
 ): Promise<void> {
@@ -144,9 +144,9 @@ export function createLogRepository<TLog, TRow extends BaseLogRow, TDraft extend
   ): Promise<void> {
     // The log and its intent to sync commit together, or neither does. This transaction is the
     // whole defence against a log the user can see but the app has forgotten to send (T9).
-    await db.withTransactionAsync(async () => {
-      await upsertRow(db, tableName, row as unknown as Record<string, unknown>);
-      await enqueue(db, { tableName, recordId: row.id, operation, payload: row }, deps);
+    await db.withTransactionAsync(async (tx) => {
+      await upsertRow(tx, tableName, row as unknown as Record<string, unknown>);
+      await enqueue(tx, { tableName, recordId: row.id, operation, payload: row }, deps);
     });
   }
 

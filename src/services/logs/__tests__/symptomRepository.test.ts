@@ -3,6 +3,7 @@
  *
  * The offline write path, against a real SQL engine and the real shipped schema.
  */
+import { failingOn } from '@/services/db/failing.testing';
 import type { SymptomDraft } from '@/domain/logs/symptom';
 import { migrate } from '@/services/db/migrator';
 import { createTestDatabase, type TestDatabase } from '@/services/db/nodeSqlite.testing';
@@ -50,16 +51,6 @@ function draft(overrides: Partial<SymptomDraft> = {}): SymptomDraft {
 }
 
 /** A database that fails any statement touching `fragment`, to simulate a crash mid-write. */
-function failingOn(source: TestDatabase, fragment: string): SqlDatabase {
-  return {
-    ...source,
-    runAsync: async (sql: string, ...params: SqlBindValue[]) => {
-      if (sql.includes(fragment)) throw new Error('simulated crash');
-      return source.runAsync(sql, ...params);
-    },
-  };
-}
-
 async function countLogs(): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>(
     'SELECT COUNT(*) AS count FROM symptom_logs'

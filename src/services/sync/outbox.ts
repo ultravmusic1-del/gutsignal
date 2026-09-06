@@ -11,7 +11,7 @@
  * "is this log synced?" a single existence check, with no denormalised status to drift.
  */
 
-import type { SqlDatabase } from '@/services/db/sqlite';
+import type { SqlDatabase, SqlStatements } from '@/services/db/sqlite';
 import type { IdGenerator } from '@/utils/id';
 
 import { isDue, nextAttemptAt } from './backoff';
@@ -114,10 +114,11 @@ export function coalesceOperation(
 
 /**
  * Queues an intent. **Must be called inside the caller's transaction**, alongside the write it
- * describes.
+ * describes — which is why it takes `SqlStatements`: the transaction handle satisfies it, and a
+ * database handle that could open a second transaction does not belong here.
  */
 export async function enqueue(
-  db: SqlDatabase,
+  db: SqlStatements,
   entry: OutboxEntry,
   { now, generateId }: { now: Date; generateId: IdGenerator }
 ): Promise<void> {

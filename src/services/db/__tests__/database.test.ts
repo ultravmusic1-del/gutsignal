@@ -19,64 +19,15 @@
  * against its own handle. The concurrency lived entirely in `openDatabase`.
  */
 
-import { DatabaseSync } from 'node:sqlite';
-
+import { createExpoSqliteLikeConnection } from '../expoSqliteLike.testing';
 import { MIGRATIONS } from '../migrations';
-import type { SqlBindValue } from '../sqlite';
 
 /**
- * A connection that behaves the way `expo-sqlite` does in the two respects that caused the bug.
- *
- * First, `withTransactionAsync` is expo-sqlite's own implementation — a literal `BEGIN` sent
- * through `execAsync`, which is what makes an overlapping pair illegal. Its documentation is
- * explicit that the transaction "is not exclusive and can be interrupted by other async queries".
- *
- * Second, the engine underneath is real. The nested-`BEGIN` error is raised by SQLite itself, not
- * asserted by a fake that was written to agree with the diagnosis.
+ * A connection that behaves the way `expo-sqlite` does, including the transaction semantics that
+ * caused this bug. Shared with `serialize.test.ts` — see that module for what it reproduces and why.
  */
 function mockCreateConnection() {
-  const db = new DatabaseSync(':memory:');
-  let open = true;
-
-  const connection = {
-    /** Whether the native side still holds this connection. See `deleteDatabaseAsync` below. */
-    isOpen: () => open,
-
-    async execAsync(source: string): Promise<void> {
-      db.exec(source);
-    },
-
-    async runAsync(source: string, ...params: SqlBindValue[]) {
-      const result = db.prepare(source).run(...params);
-      return { changes: Number(result.changes) };
-    },
-
-    async getFirstAsync<T>(source: string, ...params: SqlBindValue[]): Promise<T | null> {
-      return (db.prepare(source).get(...params) as T | undefined) ?? null;
-    },
-
-    async getAllAsync<T>(source: string, ...params: SqlBindValue[]): Promise<T[]> {
-      return db.prepare(source).all(...params) as T[];
-    },
-
-    async withTransactionAsync(task: () => Promise<void>): Promise<void> {
-      await connection.execAsync('BEGIN');
-      try {
-        await task();
-        await connection.execAsync('COMMIT');
-      } catch (error) {
-        await connection.execAsync('ROLLBACK');
-        throw error;
-      }
-    },
-
-    async closeAsync(): Promise<void> {
-      open = false;
-      db.close();
-    },
-  };
-
-  return connection;
+  return createExpoSqliteLikeConnection();
 }
 
 /**

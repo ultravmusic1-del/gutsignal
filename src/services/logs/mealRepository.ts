@@ -12,7 +12,7 @@
 import type { Meal, MealDraft, MealSize, MealTag } from '@/domain/logs/meal';
 import type { LogSource } from '@/domain/logs/source';
 import { buildOccurrence } from '@/domain/time/occurrence';
-import type { SqlDatabase } from '@/services/db/sqlite';
+import type { SqlDatabase, SqlStatements } from '@/services/db/sqlite';
 import { resolveIncoming } from '@/services/sync/merge';
 import { enqueue } from '@/services/sync/outbox';
 import type { IdGenerator } from '@/utils/id';
@@ -144,7 +144,7 @@ const UPSERT_MEAL_SQL = `
  * Writes the aggregate. **Must be called inside a transaction** — it replaces the children,
  * so a failure partway would otherwise leave a meal with some of its previous contents.
  */
-async function writeAggregate(db: SqlDatabase, row: MealRow): Promise<void> {
+async function writeAggregate(db: SqlStatements, row: MealRow): Promise<void> {
   await db.runAsync(
     UPSERT_MEAL_SQL,
     row.id,
@@ -239,10 +239,10 @@ export async function createMeal(
   const meal = buildMeal(input, deps);
   const row = toRow(meal);
 
-  await db.withTransactionAsync(async () => {
-    await writeAggregate(db, row);
+  await db.withTransactionAsync(async (tx) => {
+    await writeAggregate(tx, row);
     await enqueue(
-      db,
+      tx,
       { tableName: MEAL_LOGS_TABLE, recordId: meal.id, operation: 'insert', payload: row },
       deps
     );
@@ -292,10 +292,10 @@ export async function updateMeal(
 
   const row = toRow(updated);
 
-  await db.withTransactionAsync(async () => {
-    await writeAggregate(db, row);
+  await db.withTransactionAsync(async (tx) => {
+    await writeAggregate(tx, row);
     await enqueue(
-      db,
+      tx,
       { tableName: MEAL_LOGS_TABLE, recordId: id, operation: 'update', payload: row },
       deps
     );
@@ -348,10 +348,10 @@ export async function softDeleteMeal(db: SqlDatabase, id: string, deps: Deps): P
   const timestamp = deps.now.toISOString();
   const row = toRow({ ...existing, deletedAt: timestamp, updatedAt: timestamp });
 
-  await db.withTransactionAsync(async () => {
-    await writeAggregate(db, row);
+  await db.withTransactionAsync(async (tx) => {
+    await writeAggregate(tx, row);
     await enqueue(
-      db,
+      tx,
       { tableName: MEAL_LOGS_TABLE, recordId: id, operation: 'delete', payload: row },
       deps
     );
@@ -514,8 +514,8 @@ export async function applyServerMeals(
     });
 
     if (decision === 'apply_remote') {
-      await db.withTransactionAsync(async () => {
-        await writeAggregate(db, row);
+      await db.withTransactionAsync(async (tx) => {
+        await writeAggregate(tx, row);
       });
       applied += 1;
     } else {

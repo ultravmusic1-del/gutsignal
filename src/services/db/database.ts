@@ -1,10 +1,19 @@
 import * as SQLite from 'expo-sqlite';
 
 import { migrate } from './migrator';
+import { serializeDatabase } from './serialize';
+import type { SqlDatabase } from './sqlite';
 
 export const DATABASE_NAME = 'gutsignal.db';
 
-let opening: Promise<SQLite.SQLiteDatabase> | null = null;
+type OpenDatabase = {
+  /** What the app uses: every operation queued, one at a time. */
+  readonly db: SqlDatabase;
+  /** The raw handle, kept only so it can be closed. */
+  readonly native: SQLite.SQLiteDatabase;
+};
+
+let opening: Promise<OpenDatabase> | null = null;
 
 /**
  * Opens the local database and brings it up to the current schema version.
@@ -40,12 +49,24 @@ let opening: Promise<SQLite.SQLiteDatabase> | null = null;
  *
  * A failed open clears the memo rather than caching the rejection — otherwise one bad launch would
  * poison every retry for the lifetime of the process, and boot has a retry path (spec §21).
+ *
+ * ## Why the handle is wrapped
+ *
+ * The same non-exclusive transactions that caused the race above are still a hazard after boot:
+ * the sync engine writes on a timer while the user saves a log, on the one connection everything
+ * shares. `serializeDatabase` puts every operation through a single queue, and the raw handle is
+ * deliberately not returned — see `serialize.ts` (ADR-0046).
  */
-export function openDatabase(): Promise<SQLite.SQLiteDatabase> {
+export function openDatabase(): Promise<SqlDatabase> {
+  return open().then((opened) => opened.db);
+}
+
+function open(): Promise<OpenDatabase> {
   if (opening) return opening;
 
   opening = (async () => {
-    const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    const native = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    const db = serializeDatabase(native);
 
     try {
       // WAL keeps reads responsive while the sync engine writes. Foreign keys are off by default
@@ -55,7 +76,7 @@ export function openDatabase(): Promise<SQLite.SQLiteDatabase> {
 
       await migrate(db);
 
-      return db;
+      return { db, native };
     } catch (error) {
       // The connection opened; it was the migration that failed. Nothing outside this function has
       // a reference to it, so without this the handle leaks — and `expo-sqlite` keeps it in its
@@ -65,7 +86,7 @@ export function openDatabase(): Promise<SQLite.SQLiteDatabase> {
       //
       // Which makes the one recovery a user has for an unopenable database fail. That is exactly
       // how it failed: the boot screen's delete button did nothing at all.
-      await db.closeAsync().catch(() => undefined);
+      await native.closeAsync().catch(() => undefined);
       throw error;
     }
   })();
@@ -90,8 +111,8 @@ export async function closeDatabase(): Promise<void> {
   opening = null;
 
   // A close that races a failed open has nothing to close, and must not throw on the way out.
-  const db = await pending.catch(() => null);
-  if (db) await db.closeAsync();
+  const opened = await pending.catch(() => null);
+  if (opened) await opened.native.closeAsync();
 }
 
 /**

@@ -3,6 +3,7 @@
  *
  * The meal aggregate write path, against a real SQL engine and the real shipped schema.
  */
+import { failingOn } from '@/services/db/failing.testing';
 import type { MealDraft } from '@/domain/logs/meal';
 import { migrate } from '@/services/db/migrator';
 import { createTestDatabase, type TestDatabase } from '@/services/db/nodeSqlite.testing';
@@ -49,16 +50,6 @@ function draft(overrides: Partial<MealDraft> = {}): MealDraft {
     occurredAt: new Date('2026-08-24T11:00:00Z'),
     note: undefined,
     ...overrides,
-  };
-}
-
-function failingOn(source: TestDatabase, fragment: string): SqlDatabase {
-  return {
-    ...source,
-    runAsync: async (sql: string, ...params: SqlBindValue[]) => {
-      if (sql.includes(fragment)) throw new Error('simulated crash');
-      return source.runAsync(sql, ...params);
-    },
   };
 }
 

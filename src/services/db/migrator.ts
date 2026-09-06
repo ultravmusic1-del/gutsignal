@@ -38,9 +38,9 @@ export async function migrate(
   const current = await getSchemaVersion(db);
 
   for (const migration of pendingMigrations(current, migrations)) {
-    await db.withTransactionAsync(async () => {
-      await db.execAsync(migration.sql);
-      await db.runAsync(
+    await db.withTransactionAsync(async (tx) => {
+      await tx.execAsync(migration.sql);
+      await tx.runAsync(
         'INSERT OR REPLACE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)',
         migration.version,
         migration.name,

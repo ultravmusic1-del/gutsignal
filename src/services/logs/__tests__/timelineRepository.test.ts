@@ -249,10 +249,10 @@ describe('pagination', () => {
   async function seedSymptoms(count: number) {
     const start = Date.parse('2026-01-01T00:00:00Z');
 
-    await db.withTransactionAsync(async () => {
+    await db.withTransactionAsync(async (tx) => {
       for (let i = 0; i < count; i += 1) {
         const occurredAt = new Date(start + i * 60_000).toISOString();
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO symptom_logs (id, user_id, symptom_type, severity, occurred_at,
              occurred_local_date, occurred_tz, occurred_utc_offset_minutes, created_at, updated_at)
            VALUES (?, ?, 'bloating', 5, ?, ?, 'UTC', 0, ?, ?)`,
@@ -383,48 +383,48 @@ describe('a large diary stays smooth', () => {
     const start = Date.parse('2024-01-01T00:00:00Z');
     const stamp = (i: number) => new Date(start + i * 15 * 60_000).toISOString();
 
-    await db.withTransactionAsync(async () => {
+    await db.withTransactionAsync(async (tx) => {
       for (let i = 0; i < PER_TABLE; i += 1) {
         const occurredAt = stamp(i);
         const localDate = occurredAt.slice(0, 10);
         const common = [USER, occurredAt, localDate, occurredAt, occurredAt];
 
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO symptom_logs (id, user_id, symptom_type, severity, occurred_at,
              occurred_local_date, occurred_tz, occurred_utc_offset_minutes, created_at, updated_at)
            VALUES (?, ?, 'bloating', 5, ?, ?, 'UTC', 0, ?, ?)`,
           `s-${i}`,
           ...common
         );
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO bowel_logs (id, user_id, bristol_type, urgency, difficulty, occurred_at,
              occurred_local_date, occurred_tz, occurred_utc_offset_minutes, created_at, updated_at)
            VALUES (?, ?, 4, 'low', 'easy', ?, ?, 'UTC', 0, ?, ?)`,
           `b-${i}`,
           ...common
         );
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO wellbeing_logs (id, user_id, occurred_at, occurred_local_date,
              occurred_tz, occurred_utc_offset_minutes, created_at, updated_at)
            VALUES (?, ?, ?, ?, 'UTC', 0, ?, ?)`,
           `w-${i}`,
           ...common
         );
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO context_logs (id, user_id, context_type, value_numeric, occurred_at,
              occurred_local_date, occurred_tz, occurred_utc_offset_minutes, created_at, updated_at)
            VALUES (?, ?, 'stress', 3, ?, ?, 'UTC', 0, ?, ?)`,
           `c-${i}`,
           ...common
         );
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO meal_logs (id, user_id, title, meal_size, occurred_at,
              occurred_local_date, occurred_tz, occurred_utc_offset_minutes, created_at, updated_at)
            VALUES (?, ?, 'Meal', 'medium', ?, ?, 'UTC', 0, ?, ?)`,
           `m-${i}`,
           ...common
         );
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO meal_items (id, meal_id, user_id, raw_name, position)
            VALUES (?, ?, ?, 'rice', 0)`,
           `mi-${i}`,

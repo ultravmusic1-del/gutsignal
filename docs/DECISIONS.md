@@ -1322,3 +1322,67 @@ that were never applied would turn a transient server fault into permanent, sile
 failure is reported instead of being recorded as a clean run.
 
 **Verified** by reverting the fix: three of the nine destructive tests fail without it.
+
+---
+
+## ADR-0046 — One local connection, one operation at a time
+
+**Date.** 2026-09-06
+
+**Decision.** `openDatabase` memoizes the in-flight promise rather than the resolved handle, and
+wraps the `expo-sqlite` handle in `serializeDatabase`, which puts every operation on that
+connection through a single FIFO queue. The raw handle is not returned to application code.
+`withTransactionAsync` passes the transaction body its own statement handle (`tx`); the body must
+use it rather than the outer database.
+
+**Context.** `expo-sqlite` hands the whole app one native connection per database name, and its
+`withTransactionAsync` is a literal `BEGIN` / `COMMIT` pair sent through `execAsync`. The vendor
+documents it as "not exclusive and can be interrupted by other async queries"
+(`build/SQLiteDatabase.js:120`). So everything in the app shares one transaction state.
+
+Two failures follow, and neither announces itself.
+
+The first stopped the app booting on a physical iPhone. `openDatabase` memoized the resolved
+handle, so during the open itself it memoized nothing — around twenty call sites reach for the
+database on launch, all started before any finished, and each ran `migrate` on the same
+connection. Overlapping `BEGIN`s gave `cannot start a transaction within a transaction`, and one
+caller's `ROLLBACK` discarded work another had already recorded, leaving version rows for tables
+that no longer existed. The database could not then be opened _or_ deleted, because the failed
+open also leaked the connection and `expo-sqlite` refuses to delete an open database.
+
+The second is still latent and worse, because nothing fails loudly. The sync engine writes outside
+any transaction of its own — clearing an outbox row, advancing a cursor — on a timer, while the
+user saves a meal. That `DELETE FROM sync_queue` joins the meal's transaction. If the meal write
+rolls back, sync progress is undone with it and the record uploads twice; if it commits, sync
+progress commits early. Both callers believe they succeeded.
+
+**Alternatives considered.** (a) `withExclusiveTransactionAsync`, the vendor's own remedy.
+(b) A mutex around transactions only. (c) A queue over every operation on the connection.
+
+**Reason.** (c).
+
+(a) opens a second connection and passes a transaction object the body must use. That part is
+right, and (c) borrows it. But it protects transactions from each other only — a bare `runAsync`
+on the original connection still interleaves — and it leaves two connections contending for the
+same file.
+
+(b) fixes the boot crash and none of the silent case, which is the one that loses diary entries.
+Every write in this codebase is not inside a transaction: the outbox and cursor writes are not.
+
+(c) costs almost nothing. SQLite is single-writer; the queue only makes explicit what the engine
+enforces anyway, and every operation here is sub-millisecond.
+
+**Consequences.** A transaction holds the queue for its duration, so a statement issued on the
+outer handle from inside a transaction body would wait for a lock its own transaction holds — a
+deadlock. Hence `tx`. The compiler cannot enforce this (a zero-argument callback is assignable to
+one taking a parameter), so `createTestDatabase` is serialised too: the mistake now deadlocks a
+test on Windows instead of freezing the app on a phone. It found two such sites the moment it was
+switched on.
+
+`SqlStatements` is split from `SqlDatabase` so a helper that only runs statements — `enqueue`,
+`upsertRow`, `writeAggregate` — cannot be handed something able to open a nested transaction.
+
+**Verified** by reverting: `serialize.test.ts` runs each scenario against the unserialised
+connection and shows it failing — overlapping transactions raise SQLite's own nesting error, and a
+standalone write is silently rolled back with a stranger's transaction. `database.test.ts` drives
+20 concurrent opens and reproduces the device's boot error against the old code.

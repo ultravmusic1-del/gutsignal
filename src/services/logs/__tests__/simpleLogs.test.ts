@@ -8,6 +8,7 @@
  * What is tested here is what differs: each type's own constraints, the boolean seam, and the
  * context value-pairing rule.
  */
+import { failingOn } from '@/services/db/failing.testing';
 import type { BowelDraft } from '@/domain/logs/bowel';
 import type { ContextDraft } from '@/domain/logs/context';
 import type { WellbeingDraft } from '@/domain/logs/wellbeing';
@@ -57,16 +58,6 @@ beforeEach(async () => {
 afterEach(() => {
   db.close();
 });
-
-function failingOn(source: TestDatabase, fragment: string): SqlDatabase {
-  return {
-    ...source,
-    runAsync: async (sql: string, ...params: SqlBindValue[]) => {
-      if (sql.includes(fragment)) throw new Error('simulated crash');
-      return source.runAsync(sql, ...params);
-    },
-  };
-}
 
 function bowelDraft(overrides: Partial<BowelDraft> = {}): BowelDraft {
   return {
