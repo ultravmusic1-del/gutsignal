@@ -96,8 +96,18 @@ const config: ExpoConfig = {
 
   extra: {
     eas: {
-      // Populated by `eas init`.
-      projectId: undefined,
+      /**
+       * Created by `eas init` on 2026-09-06 under the `vivkav` account.
+       *
+       * Written by hand because `eas init` cannot edit a dynamic config — it prints the id and
+       * expects a human to place it. It is an identifier, not a secret: it appears in every build
+       * URL and in the manifest Expo Go reads.
+       *
+       * It is also what gives the project a real scope key. Without it the dev server serves
+       * `@anonymous/gutsignal-…`, and Expo Go refuses to open anonymous projects however signed in
+       * you are — which is a confusing way to discover that a project was never linked.
+       */
+      projectId: 'de69faef-a856-4173-9ca5-29eda0c230fe',
     },
     /**
      * Build provenance, read by the diagnostics screen (spec §108, review §23–24).
