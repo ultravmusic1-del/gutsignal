@@ -116,9 +116,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned, not `latest`. `latest` makes the action resolve the release through the GitHub API
+      # on every run, from a shared runner IP, and that call is unauthenticated — it failed with
+      # "rate limit exceeded" and took the build down for a reason that had nothing to do with the
+      # commit. A pinned tag is a direct download with no API call, and it also means a CLI release
+      # cannot change what this job tests overnight (CLAUDE.md §39).
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.116.0
 
       # Only the database is needed. Everything excluded here is a container this job never talks
       # to — Studio, the REST and auth servers, storage, the edge runtime, log shipping — and every
@@ -155,6 +160,10 @@ jobs:
           DB_URL="$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rls_isolation.sql
 
+      # Cleanup must never be the thing that fails a build. When the CLI install itself failed,
+      # this step ran anyway, hit `supabase: command not found`, and reported exit 127 — so the
+      # job's error was a missing binary during teardown rather than the rate limit that caused it.
       - name: Stop
         if: always()
+        continue-on-error: true
         run: supabase stop
