@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { defaultAnalysisRange } from '@/services/logs/logSetRepository';
 import type { DateRange } from '@/domain/pattern-engine/observations';
 import { buildInsights, type Insights } from '@/domain/patterns/insights';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { todayLocalDate } from '@/features/logs/useSymptomLogs';
 import { openDatabase } from '@/services/db/database';
-import { loadLogSet } from '@/services/logs/logSetRepository';
+import { defaultAnalysisRange, loadLogSet } from '@/services/logs/logSetRepository';
 
 /**
  * Running the pattern engine for the Insights screen.

@@ -170,7 +170,6 @@ export async function clearOtherAccountsFromDevice(
     const result = await wipeLocalDataExcept(db, userId);
 
     if (__DEV__ && result.unsentDiscarded > 0) {
-      // eslint-disable-next-line no-console -- a developer-only guard rail, stripped in production.
       console.warn(
         `[localAccount] Cleared ${result.owners.length} other account(s) from this device, ` +
           `discarding ${result.unsentDiscarded} entr${result.unsentDiscarded === 1 ? 'y' : 'ies'} ` +

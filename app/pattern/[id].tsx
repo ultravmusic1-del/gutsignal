@@ -15,6 +15,8 @@ import {
 } from '@/domain/patterns/findingDetail';
 import { outcomeLabel } from '@/domain/patterns/outcomeLabels';
 import { PATTERN_STATUS_COPY } from '@/domain/patterns/status';
+import { useScreenView } from '@/features/analytics/useScreenView';
+import { track } from '@/services/analytics/analytics';
 import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
 
@@ -36,6 +38,13 @@ export default function PatternDetailScreen() {
   const insights = useInsights();
   const [showCalculation, setShowCalculation] = useState(false);
 
+  const finding = insights.isSuccess ? findByFindingId(insights.data.findings, id ?? '') : null;
+
+  // Above every early return, because hooks cannot be conditional. Null until the finding actually
+  // resolves: a detail page that could not find its finding was opened, but it was not a pattern
+  // the user got to look at.
+  useScreenView('pattern_detail_opened', finding === null ? null : {});
+
   if (insights.isPending) {
     return (
       <Screen scroll topInset={false}>
@@ -47,8 +56,6 @@ export default function PatternDetailScreen() {
       </Screen>
     );
   }
-
-  const finding = insights.isSuccess ? findByFindingId(insights.data.findings, id ?? '') : null;
 
   if (finding === null) {
     return (
@@ -173,7 +180,12 @@ export default function PatternDetailScreen() {
             accessibilityHint={
               showCalculation ? 'Hides the working' : 'Shows the numbers behind this'
             }
-            onPress={() => setShowCalculation((shown) => !shown)}
+            onPress={() => {
+              // Outside the updater, which React may run twice — and only on the way open. Counting
+              // the collapse as well would double every reader who tidies up after themselves.
+              if (!showCalculation) track('pattern_calculation_expanded');
+              setShowCalculation((shown) => !shown);
+            }}
             style={({ pressed }) => ({
               opacity: pressed ? 0.7 : 1,
               minHeight: theme.spacing.minTouchTarget,

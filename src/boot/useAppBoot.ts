@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { envResult } from '@/config/env';
+import { track } from '@/services/analytics/analytics';
 import { openDatabase } from '@/services/db/database';
 import { withTimeout } from '@/utils/promise';
 
@@ -97,6 +98,10 @@ export function useAppBoot(): BootResult {
       }
 
       if (cancelled) return;
+
+      // Reported here rather than on mount: an app whose database will not open did not open
+      // either, and counting it as a launch would hide exactly the failure worth measuring.
+      track('app_opened');
 
       // Auth lands at Milestone 3; until then a booted app has no session to restore, so it
       // reports `unauthenticated` rather than pretending to be `ready`.

@@ -78,8 +78,6 @@ function warnRejected(event: AnalyticsEventName, keys: string[]): void {
   if (!__DEV__) return;
 
   const detail = keys.length > 0 ? ` Offending keys: ${keys.join(', ')}.` : '';
-
-  // eslint-disable-next-line no-console -- a developer-only guard rail; stripped in production.
   console.warn(
     `[analytics] "${event}" did not match its declared shape and was dropped.${detail} ` +
       'Values are deliberately not shown. See src/services/analytics/events.ts.'

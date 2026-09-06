@@ -21,6 +21,9 @@ import PatternDetailScreen from '../../../../app/pattern/[id]';
 const routeParams = { id: '' };
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => routeParams,
+  // The screen reports a view through useScreenView; a no-op is enough here, because what the
+  // event does is pinned in features/analytics rather than re-asserted on every screen.
+  useFocusEffect: () => {},
 }));
 
 const insightsState: {

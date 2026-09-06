@@ -10,6 +10,7 @@ import { PATTERN_STATUS_COPY, PATTERN_STATUSES } from '@/domain/patterns/status'
 import { FindingCard } from '@/features/insights/FindingCard';
 import { GutMap } from '@/features/insights/GutMap';
 import { TrendChart } from '@/features/insights/TrendChart';
+import { useScreenView } from '@/features/analytics/useScreenView';
 import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
 
@@ -33,6 +34,20 @@ export default function InsightsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insights = useInsights();
+
+  // Null until the engine has actually run: the whole value of this event is distinguishing an
+  // empty screen from a populated one, and at focus time that is not yet known.
+  useScreenView(
+    'insights_viewed',
+    insights.isSuccess
+      ? {
+          state:
+            insights.data.standsOut.length + insights.data.emerging.length > 0
+              ? 'populated'
+              : 'empty',
+        }
+      : null
+  );
 
   const openFinding = useCallback(
     (finding: Finding) => {
