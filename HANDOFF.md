@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 29** · Update the date and loop number every
+Last updated: **2026-09-06, loop 30** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 69 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 71 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **1081 passing**, 65 suites                                      |
+| Tests             | **1090 passing**, 65 suites                                      |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -200,7 +200,7 @@ something the owner must provide first, so the next unblocked milestone is **M16
 M16's analytics, monitoring, secret-scan and dependency-audit work is done; what remains of it
 needs the paused database or a DSN (listed at the end of this section). M15 is fully unblocked.
 
-**Done in loops 26–29:**
+**Done in loops 26–30:**
 
 - `domain/export/csv.ts` + 18 tests — a CSV writer that handles **two** problems. Escaping is the
   familiar one. **Formula injection** is the one that matters: a cell starting with `=`, `+`, `-`,
@@ -257,20 +257,35 @@ needs the paused database or a DSN (listed at the end of this section). M15 is f
   30 and 90 days only — a custom range needs a date picker that does not exist. No export or delete
   row, because §57 forbids a control that leads nowhere; the screen says in words what is missing.
 
+- **The week-by-week section** (loop 30) — trends were the one section spec §70 names that the
+  report lacked, and `buildTrends` was already written and tested, so the real decision was not to
+  draw a chart. A sparkline reads better on a screen and survives a photocopier badly; a clinician
+  can read numbers and point at one. So it is a table, one row per week.
+  The §59 distinction survives into a cell, which is the part worth checking: a week nobody
+  reported on shows **—**, a week reported on with no symptoms shows **0%**. Both appear in the
+  sample report, one line apart.
+  The section is suppressed when only the logging series has a trend — a one-entry diary would
+  otherwise get a table of zeroes saying what the tracking table already said.
+
+**Every section spec §70 names is now in the report**, except experiments and medications, which
+the app does not record and which the report names as absent rather than omitting silently.
+
 **Pick up here:**
 
-1. **File export needs a decision you cannot make** — see §7. It wants `expo-file-system` (writes
-   the files) and `expo-sharing` (hands them to another app), neither installed and neither
-   pre-approved. The builders in `domain/export/` are done and tested, so this is one screen
-   section once the dependencies are settled. **Do not add them on your own initiative**: the
-   standing permission says prefer not to, and two at once for one feature is not "prefer not to".
-2. **A custom report period** (spec §70 asks for 30, 90 and custom). `buildAppointmentReport` takes
-   any `DateRange`, so the work is entirely a date-range control — and there is no date picker in
-   the codebase yet, which is a design decision before it is a coding one.
-3. **M11 — Experiments** is the next unblocked milestone if M15's remainder is stuck on the above.
-   It needs M8, which is complete, and it is what unlocks the second half of `nextStep()` on the
-   pattern detail page (currently "keep logging" only, with a test forbidding the word
-   "experiment" until then).
+1. **File export is blocked on a decision only the owner can make** — see §7. It needs
+   `expo-file-system` and `expo-sharing`, neither installed nor pre-approved. **Do not add them on
+   your own initiative.** The builders in `domain/export/` are finished and tested; this is one
+   screen section once the answer comes.
+2. **A custom report period** (§70 asks for 30, 90 and custom). `buildAppointmentReport` takes any
+   `DateRange`, so the work is entirely a date-range control — and there is no date picker in the
+   codebase. That is a design decision before it is a coding one, and it is UI whose correctness
+   cannot be established here (see §3's caveat), so it is a poor use of an unattended loop.
+3. **M11 — Experiments** is therefore the next unblocked milestone, and the honest place to go.
+   It needs M8, which is complete. It is also what unlocks the second half of `nextStep()` on the
+   pattern detail page — currently "keep logging" only, with a test forbidding the word
+   "experiment" until then, and `appointmentReport.notIncluded` names experiments as missing.
+   Read spec §§64–69 before starting; an experiment is a deliberate n-of-1 trial and the honesty
+   rules around it are at least as strict as the pattern engine's.
 
 ### Milestone 16 — privacy and security hardening. **The unblocked parts are complete.**
 
@@ -482,6 +497,7 @@ Append one line per loop. Keep it short and factual.
 | 27   | Appointment-report content model (§70): denominators, no conclusions, absences named not hidden.        | 1043 tests, verify green, bundle builds |
 | 28   | Report rendered for paper (§71) — escaped, low ink, no conclusions. Sample script added.                | 1072 tests, verify green, doctor 21/21  |
 | 29   | Report reachable: You → Privacy & data, expo-print only. A closed print sheet is not an error.          | 1081 tests, verify green, doctor 21/21  |
+| 30   | Week-by-week section (§70): a table not a chart, and a dash is not a zero. §70 now fully covered.       | 1090 tests, verify green, bundle builds |
 
 ---
 
@@ -579,7 +595,9 @@ person whose entries these are is still present.
 
 #### 🟡 The appointment report is the thing to read most carefully
 
-**Run `npm run report:sample` and look at it.** That takes ten seconds and is worth more than
+**Run `npm run report:sample` and look at it.** It now includes the week-by-week table added in
+loop 30, where a dash and a 0% sit one line apart and mean different things — that contrast is the
+single thing most worth checking reads clearly on paper. Ten seconds, and worth more than
 anything I can tell you: it renders a real report from a deliberately uneven synthetic diary and
 opens it in a browser. Reading the markup through test assertions is not the same as seeing the
 page, and the page is what a clinician gets.
