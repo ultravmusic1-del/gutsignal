@@ -21,7 +21,7 @@ Everything below was run on 2026-09-06, not inferred.
 | RLS isolation suite (live project) | **67 assertions** pass, no leftover rows        |
 | Supabase security advisor          | no lints                                        |
 | `npm audit --audit-level=high`     | passes — 14 moderate, 0 high/critical           |
-| CI (`.github/workflows/ci.yml`)    | written; `migrations` job awaits its first run  |
+| CI (`.github/workflows/ci.yml`)    | **green** — all three jobs, run 34033313830     |
 
 > The Hermes bytecode step now works locally. Windows Smart App Control had been blocking that
 > binary as not-yet-reputable (ADR-0038); the block lapsed on its own, as expected. `--no-bytecode`
@@ -86,9 +86,11 @@ No accounts, hardware or decisions needed. Ordered by value.
 **The verify job needs no secrets** — the suite was confirmed to pass with no `.env` at all — so
 the gate works on a fork's pull request exactly as on a branch.
 
-> **Not yet validated:** the `migrations` job has never run. There is no Docker on the development
-> machine, so its first real execution will be on Actions. Treat a first-run failure there as
-> expected maintenance, not as a broken migration.
+> **Validated on Actions.** It took four runs, and each failure was the gate earning its place:
+> cannot execute a multi-statement file (now psql with ); a
+> swept unformatted work into an unrelated commit; and starting eleven containers to
+> run one SQL file flaked on a port bind (now database-only). None of those would have been found
+> by reading.
 
 > Branch protection itself is Bucket C — only a repo admin can enable it. Everything the rules
 > will enforce is now written.
