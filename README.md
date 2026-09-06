@@ -119,6 +119,20 @@ Database migrations live in `supabase/migrations/` and are applied via the Supab
 the CLI. RLS isolation tests: `supabase/tests/rls_isolation.sql` — CI applies every migration from
 zero and runs that suite on every pull request.
 
+### Diagnostics
+
+**Tap the version row in You seven times.** It opens a panel naming the version, build number,
+commit SHA, environment and Supabase project reference — everything needed to answer "which build,
+pointed at which backend?" from a single screenshot.
+
+Hidden rather than listed because it exists for support conversations, not for browsing. It is not
+secret, which is why it is written down here. Everything on it is an identifier; the publishable
+key and every credential are deliberately absent, and `src/config/buildInfo.ts` carries a test
+asserting nothing credential-shaped can reach that screen.
+
+The commit comes from `EAS_BUILD_GIT_COMMIT_HASH` on a real build and from local git otherwise. A
+build showing `unknown` was made outside both.
+
 ---
 
 ## Current state

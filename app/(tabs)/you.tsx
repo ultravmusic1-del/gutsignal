@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
 import { Button, Card, Divider, Screen, Text } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -12,13 +12,16 @@ import { openDatabase } from '@/services/db/database';
 import { pendingSyncCountFor } from '@/services/db/localAccount';
 import { useTheme } from '@/theme';
 
+/** Enough taps to be deliberate, few enough to describe to someone over the phone. */
+const TAPS_FOR_DIAGNOSTICS = 7;
+
 /**
  * You — profile, settings, reports, subscription, privacy (spec §18).
  *
- * Sign-out has been real since Milestone 3, and Privacy & data since Milestone 15. Everything else
- * here is still INFORMATION rather than a control — settings, subscription and reports beyond the
- * appointment one arrive at their own milestones, and a tappable row leading nowhere is the dead
- * button the spec forbids.
+ * Sign-out has been real since Milestone 3, Privacy & data since Milestone 15, and the version row
+ * quietly opens diagnostics. Everything else here is still INFORMATION rather than a control —
+ * settings and subscription arrive at their own milestones, and a tappable row leading nowhere is
+ * the dead button the spec forbids.
  */
 export default function YouScreen() {
   const theme = useTheme();
@@ -26,6 +29,7 @@ export default function YouScreen() {
   const { session, userId } = useAuth();
   const { flush } = useSync();
   const [signingOut, setSigningOut] = useState(false);
+  const [versionTaps, setVersionTaps] = useState(0);
 
   const completeSignOut = () => {
     void signOut().then((result) => {
@@ -123,14 +127,32 @@ export default function YouScreen() {
         </Card>
 
         <Card elevation="flat">
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text variant="caption" color="secondary">
-              Version
-            </Text>
-            <Text variant="caption" color="secondary">
-              {Constants.expoConfig?.version ?? 'unknown'}
-            </Text>
-          </View>
+          {/* Tapping the version several times opens diagnostics (review §23). Hidden rather than
+              listed because it is for a support conversation, not for browsing — and a visible row
+              of build identifiers on the settings screen is noise to everyone who will never need
+              it. The gesture is deliberately unannounced but not secret: it is in the README. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Version ${Constants.expoConfig?.version ?? 'unknown'}`}
+            accessibilityHint="Tap several times to open diagnostics"
+            onPress={() => {
+              const next = versionTaps + 1;
+              setVersionTaps(next);
+              if (next >= TAPS_FOR_DIAGNOSTICS) {
+                setVersionTaps(0);
+                router.push('/diagnostics');
+              }
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text variant="caption" color="secondary">
+                Version
+              </Text>
+              <Text variant="caption" color="secondary">
+                {Constants.expoConfig?.version ?? 'unknown'}
+              </Text>
+            </View>
+          </Pressable>
           <View style={{ height: theme.spacing.xxs }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text variant="caption" color="secondary">

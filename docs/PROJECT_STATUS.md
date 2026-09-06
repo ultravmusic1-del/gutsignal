@@ -140,11 +140,18 @@ the gate works on a fork's pull request exactly as on a branch.
       same record edited on two devices, offline delete vs remote edit
 - [ ] Assert report semantics match Insights semantics, and export semantics match Timeline
 
-### A4. Diagnostics and provenance (review §23–24)
+### A4. Diagnostics and provenance (review §23–24) — **DONE**
 
-- [ ] Hidden diagnostics panel: `APP_ENV`, build channel, Supabase project ref, version, build
-      number, git SHA. Identifiers only, never secrets
-- [ ] Wire the SHA and channel in at build time so a TestFlight report maps to an exact build
+- [x] Hidden panel at `app/diagnostics.tsx`, reached by tapping the version row in You seven times.
+      Shows version, build number, commit SHA, environment, Supabase project ref and bundle id
+- [x] The SHA is real: `EAS_BUILD_GIT_COMMIT_HASH` on a build, local `git rev-parse` otherwise,
+      `unknown` where neither works rather than a guess — a wrong SHA in a bug report is worse than
+      no SHA. Verified locally to match `HEAD`
+- [x] `EAS_BUILD_PROFILE` names the environment in the app, so a preview build accidentally pointed
+      at production is visible in the first screenshot rather than after an afternoon
+- [x] Identifiers only. The project ref is in every request URL and is not a secret; the
+      publishable key is absent, because a screenshot of a diagnostics panel ends up in a support
+      thread. A test asserts nothing credential-shaped can reach the screen whatever it is handed
 
 ### A5. E2E scaffolding (review §19)
 

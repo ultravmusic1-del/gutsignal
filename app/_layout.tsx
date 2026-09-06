@@ -131,6 +131,18 @@ export default function RootLayout() {
                         headerBackTitle: 'Insights',
                       }}
                     />
+                    {/* Diagnostics (review §23). Registered like any other route — reaching it is
+                    what is hidden, not the screen. An unregistered route still renders, it just
+                    silently loses its header and presentation, which is the Milestone 6 defect
+                    `src/__tests__/routeRegistration.test.ts` now exists to prevent. */}
+                    <Stack.Screen
+                      name="diagnostics"
+                      options={{
+                        headerShown: true,
+                        headerTitle: 'Diagnostics',
+                        headerBackTitle: 'You',
+                      }}
+                    />
                   </Stack>
                 </SyncProvider>
               </AuthProvider>

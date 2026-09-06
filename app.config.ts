@@ -1,4 +1,36 @@
+import { execSync } from 'node:child_process';
+
 import type { ExpoConfig } from 'expo/config';
+
+/**
+ * Which commit this build came from.
+ *
+ * EAS sets `EAS_BUILD_GIT_COMMIT_HASH`, and that is the answer that matters — a TestFlight report
+ * has to name an exact commit or "version 0.1.0" stops meaning anything after the third build.
+ * Locally there is no such variable, so git is asked directly; and where neither works the answer
+ * is `unknown` rather than a guess, because a wrong SHA in a bug report is worse than no SHA.
+ */
+function gitSha(): string {
+  const fromEas = process.env.EAS_BUILD_GIT_COMMIT_HASH;
+  if (fromEas !== undefined && fromEas !== '') return fromEas.slice(0, 12);
+
+  try {
+    return execSync('git rev-parse --short=12 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * Which backend and build profile this binary belongs to.
+ *
+ * The failure this exists to prevent: a preview build quietly pointed at production because
+ * someone copied a `.env`. Naming the environment inside the app makes that visible in the first
+ * screenshot of a bug report instead of after an afternoon of confusion.
+ */
+const appEnv = process.env.EAS_BUILD_PROFILE ?? 'development';
 
 /**
  * GutSignal Expo configuration.
@@ -66,6 +98,17 @@ const config: ExpoConfig = {
     eas: {
       // Populated by `eas init`.
       projectId: undefined,
+    },
+    /**
+     * Build provenance, read by the diagnostics screen (spec §108, review §23–24).
+     *
+     * Identifiers only. Nothing here is a secret, and nothing here may become one — this object is
+     * compiled into the bundle and readable by anyone who downloads the app.
+     */
+    build: {
+      gitSha: gitSha(),
+      appEnv,
+      builtAt: new Date().toISOString(),
     },
   },
 };
