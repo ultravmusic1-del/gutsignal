@@ -29,6 +29,11 @@ const importsAnalytics = (path: string) => {
   return /from '@\/services\/analytics\//.test(source);
 };
 
+const importsMonitoring = (path: string) => {
+  const source = readFileSync(join(process.cwd(), path), 'utf8');
+  return /from '@\/services\/monitoring\//.test(source);
+};
+
 /** Every tracked source file outside the analytics module itself, as one string. */
 const appSource = () =>
   TRACKED.filter((path) => !path.startsWith('src/services/analytics/'))
@@ -54,6 +59,17 @@ describe('analytics call sites', () => {
   it('is never reached from domain code', () => {
     const offenders = TRACKED.filter(
       (path) => path.startsWith('src/domain/') && importsAnalytics(path)
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
+  // Same reasoning as analytics, and the same risk: a report assembled inside domain code would
+  // be assembled from severities and meal items, and the engine has to stay pure to be
+  // reproducible.
+  it('monitoring is never reached from domain code either', () => {
+    const offenders = TRACKED.filter(
+      (path) => path.startsWith('src/domain/') && importsMonitoring(path)
     );
 
     expect(offenders).toEqual([]);

@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { identifyForMonitoring } from '@/services/monitoring/monitoring';
 import { bindAuthRefreshToAppState, getSupabaseClient } from '@/services/supabase/client';
 
 export type AuthState = {
@@ -60,6 +61,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unbindRefresh();
     };
   }, []);
+
+  // Reports are attributed by id and nothing else — `scrubEvent` drops email, username and IP
+  // even if a vendor SDK adds them, so this is the only way a crash can be tied to an account.
+  // Cleared on sign-out so one person's crashes are never filed under another's on a shared
+  // device, which is the same concern `localAccount.ts` handles for their data.
+  useEffect(() => {
+    identifyForMonitoring(session?.user.id ?? null);
+  }, [session]);
 
   const value = useMemo<AuthState>(
     () => ({ session, initialised, userId: session?.user.id ?? null }),

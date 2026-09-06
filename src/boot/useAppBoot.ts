@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { envResult } from '@/config/env';
 import { track } from '@/services/analytics/analytics';
 import { openDatabase } from '@/services/db/database';
+import { captureError } from '@/services/monitoring/monitoring';
 import { withTimeout } from '@/utils/promise';
 
 /**
@@ -80,6 +81,11 @@ export function useAppBoot(): BootResult {
         await withTimeout(openDatabase(), DATABASE_OPEN_TIMEOUT_MS, 'Local database');
       } catch (error) {
         if (cancelled) return;
+
+        // A device where the local database will not open cannot log anything at all, which makes
+        // it the failure most worth hearing about and the one a user is least able to report.
+        captureError('app_boot', error);
+
         setResult({
           state: 'configuration_error',
           steps: [

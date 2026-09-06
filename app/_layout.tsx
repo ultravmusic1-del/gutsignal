@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { captureError } from '@/services/monitoring/monitoring';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { SyncProvider } from '@/features/sync/SyncProvider';
 import { createQueryClient } from '@/services/query/client';
@@ -29,7 +30,7 @@ export default function RootLayout() {
         <ThemeProvider>
           {/* Above the data providers, below the theme: the fallback UI needs tokens and safe
               areas, and a provider that throws during init must still be caught. */}
-          <ErrorBoundary>
+          <ErrorBoundary onError={(error) => captureError('app_render', error)}>
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
                 {/* Inside AuthProvider: the engine's lifetime follows the session, starting
