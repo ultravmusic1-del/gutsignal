@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 26** · Update the date and loop number every
+Last updated: **2026-09-06, loop 27** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 62 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 64 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **1023 passing**, 62 suites                                      |
+| Tests             | **1043 passing**, 63 suites                                      |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -200,7 +200,7 @@ something the owner must provide first, so the next unblocked milestone is **M16
 M16's analytics, monitoring, secret-scan and dependency-audit work is done; what remains of it
 needs the paused database or a DSN (listed at the end of this section). M15 is fully unblocked.
 
-**Done in loop 26:**
+**Done in loops 26–27:**
 
 - `domain/export/csv.ts` + 18 tests — a CSV writer that handles **two** problems. Escaping is the
   familiar one. **Formula injection** is the one that matters: a cell starting with `=`, `+`, `-`,
@@ -217,25 +217,34 @@ needs the paused database or a DSN (listed at the end of this section). M15 is f
   missing file reads as "the export failed". Pure: the caller supplies `generatedAt`, so an export
   of an unchanged diary is byte-identical.
 
+- `domain/reports/appointmentReport.ts` + 20 tests — **what the report is allowed to say** (spec
+  §70, §71). The content model, not the PDF: rendering is the easy half, and this is the artefact
+  that leaves the app and is read by someone who never saw the caveats on screen.
+  Two rules are load-bearing. **Every number carries its denominator** — `ReportCount` has
+  `count`, `outOf` and a `basis` in words, so "40% of days" cannot be printed without its basis.
+  **Days with nothing recorded are counted separately, never as good days**, because a quiet
+  fortnight means the person stopped logging at least as often as it means they felt well (§59).
+  There is deliberately **no summary, headline or conclusion field**, and a test asserts their
+  absence. Sections the app cannot fill (experiments, medications) are **named** rather than
+  silently missing — on paper an absent section and an empty one look identical.
+
 **Pick up here:**
 
-1. **Wire export to a screen and a share sheet.** The builders are pure and done; what is missing
-   is the edge. `expo-sharing` is **not** currently a dependency — check `CLAUDE.md` §38 before
-   adding it, and note that `expo-file-system` writes the files either way. The You tab already
-   says "You will always be able to export everything you have logged", so this is a promise
-   already made to the user.
-   Real states are needed: a diary of several thousand entries takes a moment to serialise, and a
-   share sheet the user dismisses is not an error.
-2. **The PDF / appointment report** (spec §98, and the reason M15 exists). `expo-print` is already
-   approved in `docs/PROJECT_PLAN.md`, so no dependency decision is needed — it renders HTML to
-   PDF. The hard part is not the rendering, it is the **content**: a report handed to a clinician
-   must not overstate. Everything in `docs/PATTERN_ENGINE.md` and `CLAUDE.md` §17 applies with more
-   force here than anywhere else in the app, because this is the artefact that leaves the app and
-   gets read by someone who did not see the caveats on screen.
-   `domain/patterns/findingDetail.ts` already turns a finding into safe sentences — reuse it rather
-   than writing a second vocabulary.
-3. **CSV/JSON export is not yet reachable by a user.** Until item 1 lands, the feature exists only
-   in tests. That is worth saying plainly in any progress summary.
+1. **Render the report to HTML.** Pure and testable, no dependency: `buildAppointmentReport`
+   already returns everything, so this is a function from `AppointmentReport` to an HTML string.
+   §71 asks for legible, printable, concise, accessible, professional, **low ink** — which rules
+   out dark fills and full-bleed colour, and argues for rules and whitespace over boxes.
+   **Escape every interpolated value.** A meal item is text the user typed, and it lands in markup
+   here exactly as it lands in a CSV cell in `domain/export/csv.ts` — the same class of problem,
+   and worth solving the same way rather than trusting the input.
+   Reuse `domain/patterns/findingDetail.ts` for anything describing a finding rather than writing a
+   second vocabulary; that module is already the §17 boundary.
+2. **Then `expo-print`** (`printToFileAsync` → PDF, `printAsync` → the native print/share sheet).
+   Already approved in `docs/PROJECT_PLAN.md`, so no dependency decision is needed — but it is not
+   installed yet, so install with `npx expo install` and re-run `npx expo-doctor` and a bundle.
+   `printAsync` reaches the share sheet without `expo-sharing`, which may make that decision moot.
+3. **Wire export to a screen** (loop 26's builders are still unreachable). This is the one item
+   that may need `expo-sharing` — see §7. Doing item 2 first will tell you whether it does.
 
 ### Milestone 16 — privacy and security hardening. **The unblocked parts are complete.**
 
@@ -316,7 +325,7 @@ been buildable is the part that has to exist **before** anything depends on it.
   happened. **The SQL has never been executed** — no live project, no local Postgres. Expect a typo
   on its first real run; the caveat is at the top of the file.
 
-**Pick up here:**
+**What is left of M16, and why it is not the current work:**
 
 1. **Account deletion (spec §97, a §58 blocker).** Half-blocked, and worth reading §97 before
    starting: the flow is explain → confirm → reauthenticate → delete rows → delete Storage → clear
@@ -444,6 +453,7 @@ Append one line per loop. Keep it short and factual.
 | 24   | Crash-report scrubber (§30): allowlisted fields, redacted text, and honest about which is which.        | 984 tests, verify green, bundle builds  |
 | 25   | Dependency audit (14 moderate, no fix — ADR-0039), PRIVACY_SECURITY.md, pattern_findings RLS cover.     | 984 tests, verify green                 |
 | 26   | M15 started: diary export as lossless JSON and per-type CSV, safe against spreadsheet formulas.         | 1023 tests, verify green, bundle builds |
+| 27   | Appointment-report content model (§70): denominators, no conclusions, absences named not hidden.        | 1043 tests, verify green, bundle builds |
 
 ---
 
@@ -538,6 +548,22 @@ One consequence worth knowing: sign-out now waits on the network before showing 
 so on a bad connection the button spins for as long as a sync attempt takes. It is the only place
 in the app that waits on the network at all, and it does so because it is the last moment the
 person whose entries these are is still present.
+
+#### 🟡 The appointment report is the thing to read most carefully
+
+Of everything built tonight, this is the artefact that leaves the app. A clinician reading it never
+saw the caveats on screen, cannot tell that a finding rests on nine days, and has no reason to
+doubt a printed page. So the content model refuses more than it offers:
+
+- **No summary, headline or conclusion.** A test asserts those fields do not exist. §70 says avoid
+  generic conclusions, and the honest form is a page of observations rather than interpretations.
+- **Every rate carries its denominator and what it counts** — "12 of the 30 days you reported on",
+  never "40%".
+- **Days with nothing recorded are their own number**, never folded into good days.
+
+What I could not judge is whether it reads well to a clinician, which is the only test that
+matters. If you know one, the content model is worth five minutes of their time before it becomes
+a PDF — it is much cheaper to change now than after the layout exists.
 
 #### 🟡 Export exists but nobody can reach it yet
 
