@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Button, Screen, Text } from '@/components/ui';
 import { ONBOARDING_STEPS, type OnboardingStepName } from '@/domain/onboarding/steps';
+import { track } from '@/services/analytics/analytics';
 import { useTheme } from '@/theme';
 
 // Re-exported so existing imports keep working; the list itself lives in `domain` because the
@@ -42,6 +43,15 @@ export function OnboardingStep({
 }: OnboardingStepProps) {
   const theme = useTheme();
   const index = ONBOARDING_STEPS.indexOf(step);
+
+  // Reported here rather than in each screen: every step passes through this frame, so the funnel
+  // cannot drift as steps are added or reordered. Only the primary action counts — skipping does
+  // move a person past a step, but calling that 'completed' would misdescribe it, and a skip
+  // deserves its own event rather than being folded into this one.
+  const completeStep = () => {
+    track('onboarding_step_completed', { step });
+    onPrimary();
+  };
   const position = index + 1;
   const total = ONBOARDING_STEPS.length;
 
@@ -82,7 +92,7 @@ export function OnboardingStep({
         {children}
 
         <View style={{ gap: theme.spacing.xs, paddingTop: theme.spacing.xs }}>
-          <Button label={primaryLabel} onPress={onPrimary} disabled={primaryDisabled} />
+          <Button label={primaryLabel} onPress={completeStep} disabled={primaryDisabled} />
           {secondaryLabel && onSecondary ? (
             <Button label={secondaryLabel} variant="ghost" onPress={onSecondary} haptic={false} />
           ) : null}

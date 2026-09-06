@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 
 import { Button, Card, Screen, Text } from '@/components/ui';
+import { track } from '@/services/analytics/analytics';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { draftSnapshot, useOnboardingDraft } from '@/features/onboarding/draftStore';
 import { profileQueryKey } from '@/features/profile/useProfile';
@@ -56,6 +57,9 @@ export default function CompleteScreen() {
   const message = save.data && !save.data.ok ? save.data.message : null;
 
   const finish = () => {
+    // On the way out, not on arrival: reaching this screen is not finishing onboarding — the save
+    // can still fail, and someone can still close the app here.
+    track('onboarding_completed');
     reset();
     // Back to the boot gate, which re-reads the profile and routes into the app.
     router.replace('/');

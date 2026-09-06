@@ -11,6 +11,7 @@ import {
 import { AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
+import { track } from '@/services/analytics/analytics';
 import { openDatabase } from '@/services/db/database';
 import { clearOtherAccountsFromDevice } from '@/services/db/localAccount';
 import { createMealSyncEntity } from '@/services/logs/mealRemote';
@@ -18,7 +19,7 @@ import { createSimpleLogEntities } from '@/services/logs/logEntities';
 import { clearCursors } from '@/services/sync/cursors';
 import { createNetworkMonitor } from '@/services/sync/network';
 import { pendingCount } from '@/services/sync/outbox';
-import { createSyncEngine, type SyncEngine } from '@/services/sync/syncEngine';
+import { createSyncEngine, type SyncEngine, type SyncResult } from '@/services/sync/syncEngine';
 
 export type SyncState = {
   /** Records written on this device that the server has not confirmed. */
@@ -55,6 +56,19 @@ const SyncContext = createContext<SyncState>({
  * Nothing here blocks rendering. A sync that is slow, failing, or impossible must be invisible
  * to someone trying to log a symptom (docs/PROJECT_PLAN.md §6).
  */
+/**
+ * Reports why a run failed, once per run.
+ *
+ * Lives here rather than in the engine, which stays free of analytics so it remains portable to
+ * the Edge runtime (risk R-09). Offline runs report nothing: a journey through a tunnel is not a
+ * broken sync, and counting it as one would bury the failures that matter.
+ */
+function reportFailure(result: SyncResult | undefined): void {
+  if (result?.failureReason == null) return;
+
+  track('sync_failed', { reason: result.failureReason });
+}
+
 export function SyncProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
   const engineRef = useRef<SyncEngine | null>(null);
@@ -73,7 +87,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const flush = useCallback(async () => {
     try {
-      await engineRef.current?.syncNow();
+      reportFailure(await engineRef.current?.syncNow());
     } catch {
       // A failed flush is not an error to report: the caller's next step is to count what is
       // still outstanding, and that count is the same whether the attempt failed or found no
@@ -86,7 +100,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const syncNow = useCallback(() => {
     void (async () => {
       try {
-        await engineRef.current?.syncNow();
+        reportFailure(await engineRef.current?.syncNow());
       } catch {
         // Retries and backoff are the engine's job; a failed run is not a UI event.
       } finally {

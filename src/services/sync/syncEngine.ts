@@ -19,6 +19,11 @@
  * server has confirmed the write.
  */
 
+import {
+  classifySyncFailure,
+  dominantFailureReason,
+  type SyncFailureReason,
+} from './failureReason';
 import type { SqlDatabase } from '@/services/db/sqlite';
 
 import { readCursor, writeCursor } from './cursors';
@@ -81,6 +86,14 @@ export type SyncResult = {
   skipped: number;
   /** True when the run did nothing because the device is offline. */
   offline: boolean;
+  /**
+   * Why the run failed, when it did, in the fixed vocabulary `sync_failed` accepts.
+   *
+   * Reported rather than acted on: the engine stays free of analytics so it remains portable to
+   * the Edge runtime (risk R-09), and `SyncProvider` — which already owns the React boundary —
+   * decides what to do with it.
+   */
+  failureReason: SyncFailureReason | null;
 };
 
 const IDLE_RESULT: SyncResult = {
@@ -89,6 +102,9 @@ const IDLE_RESULT: SyncResult = {
   pulled: 0,
   skipped: 0,
   offline: true,
+  // Being offline is not a failure. Reporting one here would make every underground journey look
+  // like a broken sync.
+  failureReason: null,
 };
 
 export type SyncEngineDeps = {
@@ -138,19 +154,22 @@ export function createSyncEngine({
    * queued logs should not cost fifty round trips. If that fails, each row is retried alone, so
    * one row the server rejects cannot hold the rest of the user's history hostage.
    */
-  async function pushEntity(entity: SyncEntity): Promise<{ pushed: number; failed: number }> {
+  async function pushEntity(
+    entity: SyncEntity
+  ): Promise<{ pushed: number; failed: number; reasons: SyncFailureReason[] }> {
     const claimed = await claimDue(db, {
       tableName: entity.tableName,
       limit: PUSH_BATCH_SIZE,
       now: now(),
     });
 
-    if (claimed.length === 0) return { pushed: 0, failed: 0 };
+    if (claimed.length === 0) return { pushed: 0, failed: 0, reasons: [] };
 
     const parsed = claimed.map((row) => ({ row, payload: parsePayload(row) }));
 
     let pushed = 0;
     let failed = 0;
+    const reasons: SyncFailureReason[] = [];
 
     // A row whose payload will not parse can never succeed. Fail it so it backs off and stays
     // visible, rather than retrying a corrupt body forever at full speed.
@@ -160,13 +179,15 @@ export function createSyncEngine({
         random,
       });
       failed += 1;
+      // A corrupt local body is nobody's network and nobody's session.
+      reasons.push('unknown');
     }
 
     const sendable = parsed.flatMap((entry) =>
       entry.payload === null ? [] : [{ row: entry.row, payload: entry.payload }]
     );
 
-    if (sendable.length === 0) return { pushed, failed };
+    if (sendable.length === 0) return { pushed, failed, reasons };
 
     try {
       await entity.upsert(sendable.map((entry) => entry.payload));
@@ -174,7 +195,7 @@ export function createSyncEngine({
         await markSynced(db, entry.row.id);
         pushed += 1;
       }
-      return { pushed, failed };
+      return { pushed, failed, reasons };
     } catch {
       // Fall through to per-row isolation.
     }
@@ -187,10 +208,11 @@ export function createSyncEngine({
       } catch (error) {
         await markFailed(db, entry.row, error, { now: now(), random });
         failed += 1;
+        reasons.push(classifySyncFailure(error));
       }
     }
 
-    return { pushed, failed };
+    return { pushed, failed, reasons };
   }
 
   /** Applies everything the server has for one entity that this device has not seen. */
@@ -231,7 +253,16 @@ export function createSyncEngine({
     // failure that was never the server's fault.
     if (!(await network.isConnected())) return IDLE_RESULT;
 
-    const result: SyncResult = { pushed: 0, failed: 0, pulled: 0, skipped: 0, offline: false };
+    const result: SyncResult = {
+      pushed: 0,
+      failed: 0,
+      pulled: 0,
+      skipped: 0,
+      offline: false,
+      failureReason: null,
+    };
+
+    const reasons: SyncFailureReason[] = [];
 
     // Push everything before pulling anything: a local write is the more recent intent, and
     // sending it first keeps the merge from having to arbitrate a conflict we created.
@@ -239,7 +270,12 @@ export function createSyncEngine({
       const pushResult = await pushEntity(entity);
       result.pushed += pushResult.pushed;
       result.failed += pushResult.failed;
+      reasons.push(...pushResult.reasons);
     }
+
+    // One reason for the whole run, not one per row: fifty rows failing behind a single expired
+    // session is one problem, and fifty events would say otherwise.
+    result.failureReason = dominantFailureReason(reasons);
 
     for (const entity of entities) {
       const pullResult = await pullEntity(entity);
