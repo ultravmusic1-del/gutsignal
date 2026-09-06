@@ -153,11 +153,24 @@ the gate works on a fork's pull request exactly as on a branch.
       publishable key is absent, because a screenshot of a diagnostics panel ends up in a support
       thread. A test asserts nothing credential-shaped can reach the screen whatever it is handed
 
-### A5. E2E scaffolding (review §19)
+### A5. E2E scaffolding (review §19) — **WRITTEN, NEVER RUN**
 
-- [ ] Write the 8–12 critical journeys as Maestro flows and commit them. **Authoring is Bucket A;
-      running them needs a device or simulator, which is Bucket C.** Writing them now means the
-      first device session has a script instead of improvisation
+- [x] Eight Maestro flows in `.maestro/`, chosen against §54's priority order rather than as a map
+      of the app: onboarding to first entry, offline logging surviving a force-quit, offline edit,
+      offline delete propagating as a tombstone, the sign-out warning, account switching, account
+      deletion, and the two native sheets
+- [x] Targeted by accessibility label rather than testID — §36 already requires those labels to
+      exist and stay accurate, so the flows lean on something the app must maintain anyway
+- [x] Each flow names the assertions Maestro **cannot** make, as SQL to run against Supabase
+      afterwards. The flows assert what the app shows; sync is the claim that the app and the
+      server agree, and only half of that is visible from the phone
+
+> **None of these has ever run.** Every selector was read out of the source rather than observed on
+> screen, so expect to fix some on the first device session. They exist now so that session is
+> spent finding out whether GutSignal works rather than deciding what to try.
+>
+> A green run is not evidence until a flow has failed once for a real reason. A suite that has only
+> ever passed is the trap ADR-0041 describes.
 
 ### A6. Export delivery — **DONE**
 

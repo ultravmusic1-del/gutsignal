@@ -1,0 +1,53 @@
+# One person's diary never appears on another person's screen.
+#
+# §58 calls known cross-user data access a release blocker. RLS proves the server will not serve
+# it; this proves the device does not still have it lying around from the last person who signed
+# in. The two are different failures and only one of them is testable in SQL.
+#
+# Needs two accounts. Set MAESTRO_TEST_EMAIL and MAESTRO_SECOND_EMAIL before running.
+appId: com.vivaan.gutsignal
+---
+- launchApp
+
+# --- Account one leaves something behind -----------------------------------
+- tapOn: 'Timeline'
+- assertVisible: 'unsent when signing out'
+- takeScreenshot: 'account-one-timeline'
+
+- tapOn: 'You'
+- tapOn: 'Sign out'
+- tapOn:
+    text: 'Sign out'
+    index: 1
+
+# --- Account two signs in --------------------------------------------------
+- assertVisible: 'Get started|I already have an account'
+- runFlow:
+    when:
+      visible: 'I already have an account'
+    commands:
+      - tapOn: 'I already have an account'
+
+- tapOn: 'Continue with email'
+- tapOn: 'Email address'
+- inputText: '${MAESTRO_SECOND_EMAIL}'
+- tapOn: 'Send code'
+- tapOn: 'Verification code'
+- inputText: '${MAESTRO_SECOND_CODE}'
+- tapOn: 'Verify'
+
+# --- Nothing of account one's is reachable ---------------------------------
+- tapOn: 'Timeline'
+- assertNotVisible: 'unsent when signing out'
+- assertNotVisible: 'offline test meal'
+- takeScreenshot: 'account-two-timeline-empty'
+
+# Insights recompute from local logs, so a leak would surface here too even if the timeline
+# filtered correctly.
+- tapOn: 'Insights'
+- assertNotVisible: 'unsent when signing out'
+# --- And the watermark was cleared too -------------------------------------
+# `sync_cursors` is keyed by table, not by user. A stale cursor would make this account's first
+# pull resume from the previous account's position and silently skip its history — data loss that
+# looks like an empty diary. After signing back in as account one, its entries must ALL return,
+# not just the ones written after the switch.

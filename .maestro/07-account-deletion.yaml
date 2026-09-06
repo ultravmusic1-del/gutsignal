@@ -1,0 +1,49 @@
+# Deleting an account removes it, clears the device, and ends the session.
+#
+# App Store review checks this, and §58 makes its absence a release blocker. The server half is
+# verified against the live project already (ADR-0042); what has never run on a phone is the rest
+# of the sequence — the device wipe and the sign-out that follows it.
+#
+# ⚠ This flow destroys the account it is run against. Use a throwaway one.
+appId: com.vivaan.gutsignal
+---
+- launchApp
+
+- tapOn: 'You'
+- tapOn: 'Privacy & data'
+
+# --- Everything it costs is said before the control -----------------------
+- assertVisible: 'Delete your account'
+- assertVisible:
+    text: '(?i)cannot be undone'
+# §97 requires this said separately, and it is the one thing nobody can be told afterwards.
+- assertVisible:
+    text: '(?i)does not automatically cancel an Apple subscription'
+- takeScreenshot: 'deletion-explainer'
+
+# --- It cannot be triggered by accident -----------------------------------
+- tapOn: 'Delete account'
+- assertVisible: 'Delete your account'
+# Still here: the button does nothing until the word is typed.
+
+- tapOn: 'Type DELETE to confirm'
+- inputText: 'DELETE'
+- tapOn: 'Delete account'
+
+# --- The session ends ------------------------------------------------------
+- extendedWaitUntil:
+    visible: 'Get started'
+    timeout: 30000
+
+# --- The device kept nothing -----------------------------------------------
+- stopApp
+- launchApp
+- assertVisible: 'Get started'
+- assertNotVisible: 'Timeline'
+# --- Then check the server -------------------------------------------------
+#   select count(*) from auth.users where email = '<the throwaway address>';
+#
+# Expect 0, and 0 rows in every log table for that user id — the cascade should have taken them.
+#
+# Then try to sign in as that account again. It must be treated as a NEW account, not resurrect
+# the old one. A returning email that finds its old diary would mean the auth row survived.

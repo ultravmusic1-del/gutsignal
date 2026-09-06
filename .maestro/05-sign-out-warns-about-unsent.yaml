@@ -1,0 +1,42 @@
+# Nobody loses an unsent entry without being told first.
+#
+# Signing out clears the device for the next person, which can discard entries the server never
+# accepted. §15 forbids doing that silently, so sign-out flushes, counts what is left, and names
+# the number — and the warning is deliberately unreassuring.
+appId: com.vivaan.gutsignal
+---
+- launchApp
+
+# --- Create something that cannot be sent ---------------------------------
+- extendedWaitUntil:
+    visible: 'Today'
+    timeout: 60000
+    # ^ pause for airplane mode on
+
+- tapOn: 'Log an entry'
+- tapOn: 'What was in it?'
+- inputText: 'unsent when signing out'
+- tapOn: 'Save'
+
+# --- Sign out while it is still queued ------------------------------------
+- tapOn: 'You'
+- tapOn: 'Sign out'
+
+# The count has to appear. A generic "are you sure?" here would be the failure: it tells the person
+# nothing about what they are about to lose.
+- assertVisible:
+    text: '.*[0-9]+.*'
+- takeScreenshot: 'sign-out-warning-with-count'
+
+# And it must not soften it. `signOutPlan.ts` has a test forbidding "safe" and "nothing will be
+# lost"; this checks the same promise reached the screen.
+- assertNotVisible:
+    text: '(?i)nothing will be lost|your data is safe'
+
+- tapOn: 'Cancel'
+
+# --- The entry is still there after cancelling ----------------------------
+- tapOn: 'Timeline'
+- assertVisible: 'unsent when signing out'
+# Cancelling must change nothing at all. Reconnect and let it sync normally before running any
+# other flow, or the next one starts from a dirty outbox.

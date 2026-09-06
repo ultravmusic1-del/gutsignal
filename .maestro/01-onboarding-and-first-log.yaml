@@ -1,0 +1,62 @@
+# From a fresh install to a saved entry.
+#
+# The journey nobody gets to repeat. If this breaks, nothing after it matters, and the person who
+# hit it is already gone.
+appId: com.vivaan.gutsignal
+---
+- clearState
+- launchApp
+
+# --- Welcome -------------------------------------------------------------
+- assertVisible: 'Get started'
+- tapOn: 'Get started'
+
+# --- Onboarding ----------------------------------------------------------
+# Every step is skippable by design, so the flow walks rather than fills: what is being checked is
+# that the sequence completes and lands somewhere real, not that any particular answer was stored.
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: 'Continue'
+          commands:
+            - tapOn: 'Continue'
+
+- assertVisible:
+    text: 'Explore GutSignal|Log my first entry|Continue with email'
+    # Onboarding ends at either the auth choice or the finished screen depending on where the
+    # session stands. Both are a pass here.
+
+# --- Sign in -------------------------------------------------------------
+# Email rather than Apple: the code is readable from the inbox, and Sign in with Apple cannot be
+# driven from an automated flow. Apple sign-in is a manual item in PROJECT_STATUS §5 C2.
+- runFlow:
+    when:
+      visible: 'Continue with email'
+    commands:
+      - tapOn: 'Continue with email'
+      - tapOn: 'Email address'
+      - inputText: '${MAESTRO_TEST_EMAIL}'
+      - tapOn: 'Send code'
+      - assertVisible: 'Verification code'
+      # Manual step: read the emailed code. Maestro pauses here for the operator.
+      - tapOn: 'Verification code'
+      - inputText: '${MAESTRO_TEST_CODE}'
+      - tapOn: 'Verify'
+
+# --- The first entry -----------------------------------------------------
+- assertVisible: 'Today'
+- tapOn: 'Log an entry'
+  # Targeted by its accessibility label, not a testID. §36 requires that label to exist and stay
+  # accurate, so the flow leans on something the app already has to maintain rather than on an
+  # attribute that exists only for tests and rots the moment nobody runs them.
+
+- assertVisible: 'What was it?'
+- tapOn: 'Bloating'
+- tapOn: 'Save'
+
+# --- It is really there --------------------------------------------------
+- assertVisible: 'Today'
+- tapOn: 'Timeline'
+- assertVisible: 'Bloating'

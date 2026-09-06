@@ -1,0 +1,64 @@
+# The core claim, and the reason the whole offline architecture exists.
+#
+# Log with no connection, force-quit the app mid-flight, reopen still offline, reconnect, and find
+# that nothing was lost and nothing was duplicated. Milestone 5's acceptance criterion has never
+# been met, because it cannot be met without a phone.
+#
+# `CLAUDE.md` §15: never silently discard an unsynchronised record. This flow is that sentence,
+# made checkable.
+appId: com.vivaan.gutsignal
+---
+- launchApp
+
+# --- Go offline ----------------------------------------------------------
+# Maestro cannot toggle airplane mode itself. Stop and do it by hand — and do it properly: airplane
+# mode, not just Wi-Fi off, or cellular will quietly keep the sync alive and the flow will pass
+# while proving nothing.
+- assertVisible: 'Today'
+- takeScreenshot: 'before-offline'
+- extendedWaitUntil:
+    visible: 'Today'
+    timeout: 60000
+    # ^ 60 seconds to turn airplane mode on. The assertion is a placeholder for the pause.
+
+# --- Log two entries with no connection ----------------------------------
+- tapOn: 'Log an entry'
+- assertVisible: 'What was in it?'
+- tapOn: 'What was in it?'
+- inputText: 'offline test meal'
+- tapOn: 'Save'
+
+- tapOn: 'Log an entry'
+- tapOn: 'Felt unfinished'
+- tapOn: 'Save'
+
+# Both must be visible immediately. The UI never waits on the network (§15), so anything slower
+# than instant here is a defect even if the entry eventually appears.
+- tapOn: 'Timeline'
+- assertVisible: 'offline test meal'
+
+# --- Force-quit, still offline -------------------------------------------
+# The moment that matters. Everything written so far lives in SQLite and the outbox; if either was
+# only in memory, this is where it disappears.
+- stopApp
+- launchApp
+
+- tapOn: 'Timeline'
+- assertVisible: 'offline test meal'
+- takeScreenshot: 'after-force-quit-offline'
+
+# --- Reconnect -----------------------------------------------------------
+# Turn airplane mode off by hand, then let the sync run.
+- extendedWaitUntil:
+    visible: 'Timeline'
+    timeout: 60000
+
+- assertVisible: 'offline test meal'
+- takeScreenshot: 'after-reconnect'
+# --- Then check the server -----------------------------------------------
+# Maestro cannot see Supabase. This is a manual assertion and it is the important half:
+#
+#   select title, occurred_local_date from meal_logs order by created_at desc limit 5;
+#
+# Expect exactly ONE 'offline test meal'. Two means the outbox retried without the upsert
+# deduplicating on the device-generated id, which is the failure the whole id scheme prevents.

@@ -1,0 +1,77 @@
+# The two places GutSignal hands a file to iOS.
+#
+# Both are pure domain code with tests behind them and a native sheet in front, and the sheet is
+# precisely the half Jest cannot see. `Sharing.isAvailableAsync()` in particular answers false on a
+# build where the config plugin did not register — which nothing but a real build reveals.
+appId: com.vivaan.gutsignal
+---
+- launchApp
+- tapOn: 'You'
+- tapOn: 'Privacy & data'
+
+# --- The appointment report -----------------------------------------------
+- assertVisible: 'Report for an appointment'
+# It must say what it is not, before it is made, to whoever might hand it to a clinician (§17).
+- assertVisible:
+    text: '(?i)does not diagnose'
+
+- tapOn: 'Last 30 days'
+- tapOn: 'Create report'
+
+# The iOS print sheet. Its contents belong to the system, so all this can assert is that it opened.
+- extendedWaitUntil:
+    visible:
+      text: '(?i)print|cancel|options'
+    timeout: 30000
+- takeScreenshot: 'print-sheet'
+- tapOn:
+    text: '(?i)cancel'
+
+# A dismissed sheet is not an error. `useCreateReport` resolves that as 'dismissed', and showing a
+# red box to someone who simply changed their mind is the failure the design avoids.
+- assertNotVisible:
+    text: '(?i)could not be built'
+
+# --- Export ----------------------------------------------------------------
+- assertVisible: 'Export your diary'
+- assertVisible: 'Everything (JSON)'
+
+# Default first: the complete record, one tap, no choosing.
+- tapOn: 'Export'
+- extendedWaitUntil:
+    visible:
+      text: '(?i)airdrop|copy|save to files|cancel'
+    timeout: 30000
+- takeScreenshot: 'share-sheet-json'
+- tapOn:
+    text: '(?i)cancel'
+
+# Then a CSV, to prove the picker actually changes which file is handed over.
+- tapOn: 'Symptoms'
+- tapOn: 'Export'
+- extendedWaitUntil:
+    visible:
+      text: '(?i)airdrop|copy|save to files|cancel'
+    timeout: 30000
+
+# Save this one to Files and open it. The assertion Maestro cannot make is the one that matters:
+# the CSV should carry BOTH readings of every timestamp — the instant and the local date, time and
+# offset — because a diary exported without the local reading cannot be read back correctly by
+# anyone who was not in that timezone.
+- takeScreenshot: 'share-sheet-csv'
+- tapOn:
+    text: '(?i)cancel'
+
+# --- Diagnostics, while here ------------------------------------------------
+# Seven taps on the version row. Worth confirming on device because it is how every later support
+# conversation starts.
+- tapOn: 'You'
+- repeat:
+    times: 7
+    commands:
+      - tapOn: 'Version'
+- assertVisible: 'Diagnostics'
+- assertVisible: 'Commit'
+# On a real EAS build this must NOT read 'unknown' — that would mean the commit hash never reached
+# the binary and no TestFlight report can be traced back to a build.
+- takeScreenshot: 'diagnostics'

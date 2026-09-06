@@ -1,0 +1,51 @@
+# A deletion is a tombstone that travels, not a local disappearance.
+#
+# The failure this catches is the quiet one: the entry vanishes from the phone, the server never
+# hears about it, and it reappears the next time the device pulls — or worse, on another device
+# that never knew it was deleted.
+appId: com.vivaan.gutsignal
+---
+- launchApp
+- tapOn: 'Timeline'
+- assertVisible: 'edited while offline'
+
+# --- Delete with no connection -------------------------------------------
+- extendedWaitUntil:
+    visible: 'Timeline'
+    timeout: 60000
+    # ^ pause for airplane mode on
+
+- longPressOn: 'edited while offline'
+- tapOn: 'Delete'
+- tapOn:
+    text: 'Delete'
+    index: 1
+    # The confirmation. If this taps the wrong control the flow fails loudly, which is correct —
+    # a delete confirmation that can be hit by accident is itself the defect.
+
+- assertNotVisible: 'edited while offline'
+
+# --- It stays deleted across a restart ------------------------------------
+- stopApp
+- launchApp
+- tapOn: 'Timeline'
+- assertNotVisible: 'edited while offline'
+
+# --- Reconnect ------------------------------------------------------------
+- extendedWaitUntil:
+    visible: 'Timeline'
+    timeout: 60000
+    # ^ pause for airplane mode off
+
+# The real test of a tombstone: it must not come back when the next pull arrives.
+- assertNotVisible: 'edited while offline'
+- stopApp
+- launchApp
+- tapOn: 'Timeline'
+- assertNotVisible: 'edited while offline'
+# --- In Supabase ----------------------------------------------------------
+#   select id, title, deleted_at from meal_logs order by updated_at desc limit 5;
+#
+# Expect the row still PRESENT with a non-null deleted_at. A hard delete would be wrong: another
+# device needs the tombstone to learn about it, and a row that simply disappeared is
+# indistinguishable from one that never synced.
