@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 27** · Update the date and loop number every
+Last updated: **2026-09-06, loop 28** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 64 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 67 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **1043 passing**, 63 suites                                      |
+| Tests             | **1072 passing**, 64 suites                                      |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -200,7 +200,7 @@ something the owner must provide first, so the next unblocked milestone is **M16
 M16's analytics, monitoring, secret-scan and dependency-audit work is done; what remains of it
 needs the paused database or a DSN (listed at the end of this section). M15 is fully unblocked.
 
-**Done in loops 26–27:**
+**Done in loops 26–28:**
 
 - `domain/export/csv.ts` + 18 tests — a CSV writer that handles **two** problems. Escaping is the
   familiar one. **Formula injection** is the one that matters: a cell starting with `=`, `+`, `-`,
@@ -228,23 +228,37 @@ needs the paused database or a DSN (listed at the end of this section). M15 is f
   absence. Sections the app cannot fill (experiments, medications) are **named** rather than
   silently missing — on paper an absent section and an empty one look identical.
 
+- `domain/reports/reportHtml.ts` + 29 tests — **the report on paper** (spec §71). Every constraint
+  §71 names points the same way, and **low ink** does the most work: no dark fills, no full-bleed
+  colour, no boxes — rules and whitespace, which is also what photocopies legibly.
+  **Every interpolated value is escaped**, because a meal item is text the user typed and markup is
+  as unforgiving as a spreadsheet cell. Findings are described with `findingDetail`'s existing
+  sentences rather than a second vocabulary for print — that module is already the §17 boundary,
+  and the printed copy is the one nobody can correct afterwards.
+  Structure is for paper: `@page` margins, `page-break-inside: avoid` on every section, a header
+  row and scoped row headers on every table.
+- **`npm run report:sample`** — renders a report from a deliberately uneven synthetic diary and
+  opens it. No test can tell you whether a page reads well, and that is the only thing that matters
+  for something handed to a clinician. `scripts/alias-hooks.mjs` supplies what Jest and Metro each
+  provide invisibly (the `@/` alias, and the extensions TypeScript omits); Node 24 strips the types
+  itself. Output goes to the OS temp directory, never the repo.
+
 **Pick up here:**
 
-1. **Render the report to HTML.** Pure and testable, no dependency: `buildAppointmentReport`
-   already returns everything, so this is a function from `AppointmentReport` to an HTML string.
-   §71 asks for legible, printable, concise, accessible, professional, **low ink** — which rules
-   out dark fills and full-bleed colour, and argues for rules and whitespace over boxes.
-   **Escape every interpolated value.** A meal item is text the user typed, and it lands in markup
-   here exactly as it lands in a CSV cell in `domain/export/csv.ts` — the same class of problem,
-   and worth solving the same way rather than trusting the input.
-   Reuse `domain/patterns/findingDetail.ts` for anything describing a finding rather than writing a
-   second vocabulary; that module is already the §17 boundary.
-2. **Then `expo-print`** (`printToFileAsync` → PDF, `printAsync` → the native print/share sheet).
-   Already approved in `docs/PROJECT_PLAN.md`, so no dependency decision is needed — but it is not
-   installed yet, so install with `npx expo install` and re-run `npx expo-doctor` and a bundle.
-   `printAsync` reaches the share sheet without `expo-sharing`, which may make that decision moot.
-3. **Wire export to a screen** (loop 26's builders are still unreachable). This is the one item
-   that may need `expo-sharing` — see §7. Doing item 2 first will tell you whether it does.
+1. **`expo-print`, and a screen to reach any of this from.** The whole M15 pipeline is built and
+   pure — diary → JSON/CSV, diary → report → HTML — and **none of it is reachable by a user.** That
+   is now the gap, not the logic.
+   `expo-print` is already approved in `docs/PROJECT_PLAN.md`, so there is no dependency decision:
+   install with `npx expo install expo-print`, then re-run `npx expo-doctor` and a bundle.
+   `printToFileAsync` gives a PDF path; `printAsync` opens the native print/share sheet directly,
+   which may make the `expo-sharing` question in §7 moot — check that before adding it.
+   Put it behind **You → Privacy & Data**, which spec §97 already names as the home for export and
+   deletion. Real states are needed: serialising a large diary takes a moment, and a share sheet
+   the user dismisses is not an error.
+2. **Period selection** (spec §70 asks for 30-day, 90-day and custom). `buildAppointmentReport`
+   already takes any `DateRange`, so this is a control, not new logic.
+3. **Read the sample before changing the report.** `npm run report:sample` is faster than reasoning
+   about the markup, and it is how the toast finding below was noticed.
 
 ### Milestone 16 — privacy and security hardening. **The unblocked parts are complete.**
 
@@ -454,6 +468,7 @@ Append one line per loop. Keep it short and factual.
 | 25   | Dependency audit (14 moderate, no fix — ADR-0039), PRIVACY_SECURITY.md, pattern_findings RLS cover.     | 984 tests, verify green                 |
 | 26   | M15 started: diary export as lossless JSON and per-type CSV, safe against spreadsheet formulas.         | 1023 tests, verify green, bundle builds |
 | 27   | Appointment-report content model (§70): denominators, no conclusions, absences named not hidden.        | 1043 tests, verify green, bundle builds |
+| 28   | Report rendered for paper (§71) — escaped, low ink, no conclusions. Sample script added.                | 1072 tests, verify green, doctor 21/21  |
 
 ---
 
@@ -550,6 +565,17 @@ in the app that waits on the network at all, and it does so because it is the la
 person whose entries these are is still present.
 
 #### 🟡 The appointment report is the thing to read most carefully
+
+**Run `npm run report:sample` and look at it.** That takes ten seconds and is worth more than
+anything I can tell you: it renders a real report from a deliberately uneven synthetic diary and
+opens it in a browser. Reading the markup through test assertions is not the same as seeing the
+page, and the page is what a clinician gets.
+
+Doing that myself was already worth it. The engine found “toast → fewer symptoms” in the sample
+data — correct, because the synthetic diary puts toast on the good days, and exactly the shape of
+finding that would embarrass us if it were stated confidently. The page hedges it properly:
+emerging signal, confidence low, three limitations named, denominators printed beside both rates.
+That is the pipeline behaving as designed, end to end, on something I did not hand-pick.
 
 Of everything built tonight, this is the artefact that leaves the app. A clinician reading it never
 saw the caveats on screen, cannot tell that a finding rests on nine days, and has no reason to
