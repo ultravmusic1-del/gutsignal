@@ -1046,3 +1046,37 @@ the ranking does not yet know what it is ranking. Scoring severity from `meanSev
 on its own scale is a methodology change that needs its own ADR and fixture scenarios, and is
 recorded in `PATTERN_ENGINE.md` §6 as a known limitation rather than silently left out.
 
+---
+
+## ADR-0041 — The RLS isolation suite is run, not merely written
+
+**Status:** Accepted · **Date:** 2026-09-06
+
+**Context.** `supabase/tests/rls_isolation.sql` had never been executed. The Supabase project was
+paused when it was written, and the file said so honestly: "structurally reviewed but unrun.
+Expect to fix a typo on its first real run."
+
+It contained two, and neither was a typo a reader would catch:
+
+1. The block opened with `do $` — a single dollar sign — and closed with `$$;`. Dollar quoting
+   requires `$$` or `$tag$`, so the file was never valid SQL and **no** part of it had ever run,
+   not just the `pattern_findings` section.
+2. `anon_tables := anon_tables || 'pattern_findings'` fails at runtime. The untyped literal makes
+   Postgres resolve `||` as array-to-array and try to parse the string as an array literal. It
+   needs `::text`.
+
+**Reason.** §14 makes a missing or untested RLS policy a release blocker, and a security test that
+has never executed provides no assurance whatsoever — it is worse than none, because its presence
+in the tree reads as coverage. Both defects are invisible to review and instant on execution,
+which is the entire argument for running it.
+
+**Consequences.** With the migration applied, the suite passes **67 assertions** against the live
+project, covering every user-owned table plus `pattern_findings` and the anonymous-client checks.
+The fixtures roll back, and the project was confirmed to hold zero leftover rows afterwards.
+Supabase's own security advisor reports no lints.
+
+The suite is run through the Management API rather than `psql`, which is not installed on the
+Windows dev machine (§6). `supabase db query --file --linked` would run the committed file
+directly and is the better route once an access token is configured; that is worth doing, because
+running a hand-copied version of a security test is a practice that eventually verifies the wrong
+thing.

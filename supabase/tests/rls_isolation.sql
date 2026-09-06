@@ -15,13 +15,20 @@
 --       it names any table that was skipped because its migration is not applied yet.
 -- Fail: raises an exception naming the check that failed
 
--- NOTE (2026-09-06): the pattern_findings section has never been executed. The Supabase project
--- has been paused since it was written, and there is no local Postgres on the Windows dev machine,
--- so it is structurally reviewed but unrun. Expect to fix a typo on its first real run.
+-- NOTE (2026-09-06): first executed today, against the live project with
+-- 20260906090000_pattern_findings.sql applied. 67 assertions pass, including pattern_findings and
+-- the anonymous-client checks, and the rollback was confirmed to leave no rows behind.
+--
+-- It had been written while the project was paused, and being unrun hid two defects that no
+-- amount of reading had caught: the block opened with `do $` rather than `do $$`, so the file was
+-- never valid SQL and *nothing* in it had ever run; and appending to `anon_tables` without a
+-- `::text` cast failed at runtime, because an untyped literal makes Postgres resolve `||` as
+-- array-to-array. Both are recorded in ADR-0041. The lesson is the cheap one: a security test
+-- that has not been executed is not evidence, however carefully it reads.
 
 begin;
 
-do $
+do $$
 declare
   user_a uuid := '11111111-1111-4111-8111-111111111111';
   user_b uuid := '22222222-2222-4222-8222-222222222222';
@@ -684,7 +691,7 @@ begin
   ];
 
   if findings_present then
-    anon_tables := anon_tables || 'pattern_findings';
+    anon_tables := anon_tables || 'pattern_findings'::text;
   end if;
 
   foreach table_name in array anon_tables
