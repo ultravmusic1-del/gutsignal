@@ -348,3 +348,55 @@ describe('analyse — the scan accounts for its own breadth', () => {
     expect(amongMany!.confidence).toBeLessThan(alone!.confidence);
   });
 });
+
+describe('analyse — severity outcomes', () => {
+  /**
+   * A severity comparison needs a mean on both sides.
+   *
+   * When a symptom never occurred in one group there is nothing to average there, so the
+   * "intensity" question was never actually answered. The engine used to emit a finding anyway,
+   * carrying the occurrence rate under an intensity label — a duplicate of the occurrence
+   * finding beside it, wearing a different name. Two findings that look like corroboration but
+   * rest on one measurement overstate the evidence (§18), and each one also consumes a slot in
+   * the breadth correction that §21 applies to the width of the scan.
+   */
+  it('does not emit a severity finding when one group has no severity to average', () => {
+    // background: 0 — the symptom appears only on exposed days, so control days have no severity.
+    const findings = run(diary({ strength: 0.8, background: 0 }));
+
+    const severity = findings.filter((f) => f.outcome.kind === 'symptom_severity');
+    const occurrence = findings.filter((f) => f.outcome.kind === 'symptom_occurrence');
+
+    // The occurrence question was answerable and is still reported.
+    expect(occurrence.length).toBeGreaterThan(0);
+    expect(severity).toEqual([]);
+  });
+
+  it('still emits a severity finding when both groups have a mean to compare', () => {
+    const exposedDates = ALL.filter((_, i) => i % 2 === 0);
+    const controlDates = ALL.filter((_, i) => i % 2 === 1);
+
+    // Symptoms on every day, but reported far more strongly on exposed days.
+    const logs: LogSet = {
+      ...empty,
+      meals: exposedDates.map((date) => meal(date, ['caffeinated'])),
+      symptoms: [
+        ...exposedDates.map((date) => symptom(date, 9)),
+        ...controlDates.map((date) => symptom(date, 2)),
+      ],
+    };
+
+    const severity = run(logs).filter((f) => f.outcome.kind === 'symptom_severity');
+
+    expect(severity.length).toBeGreaterThan(0);
+    expect(severity[0]!.metrics.meanSeverityDifference).not.toBeNull();
+  });
+
+  // The breadth correction exists to account for how many questions were asked. A question that
+  // could not be answered was not asked, and must not make every real finding look weaker.
+  it('does not count an unanswerable severity comparison against the breadth correction', () => {
+    const findings = run(diary({ strength: 0.8, background: 0 }));
+
+    expect(findings.every((f) => f.outcome.kind !== 'symptom_severity')).toBe(true);
+  });
+});

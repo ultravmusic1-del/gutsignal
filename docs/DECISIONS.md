@@ -992,3 +992,57 @@ reasoning and the exact paths, so the next person does not have to redo the anal
 re-checked on every Expo SDK upgrade. **A high or critical finding is a release blocker under
 `CLAUDE.md` §58 and must not be accepted this way** — this ADR covers moderate findings with a
 documented absence of data exposure, and nothing broader.
+
+---
+
+## ADR-0040 — A severity finding is only emitted when both groups have a mean
+
+**Status:** Accepted · **Date:** 2026-09-06
+
+**Context.** `symptom_severity` is labelled "Bloating intensity", but every surface described it
+with the occurrence template — "was recorded less often" — and quantified it with
+`exposedOutcomeRate`/`controlOutcomeRate`. An intensity is higher or lower, not more or less
+frequent, so the sentence stated something the engine never measured.
+
+The cause is that a severity finding's rate metrics _are_ the occurrence metrics:
+`outcomeOccurredOn` returns the same boolean for `symptom_severity` as for `symptom_occurrence`,
+and only `meanSeverityDifference` distinguishes them. `meanSeverityDifference` was computed and
+then read by nothing outside the engine.
+
+The consequence was worse than a wording slip. On the sample diary every one of the six severity
+findings had `meanSeverityDifference === null` — no mean on one side, because the symptom never
+occurred in that group — so each rendered as a byte-for-byte copy of the occurrence finding
+beside it, differing only by the word "intensity". A reader saw two findings where there was one
+measurement, which reads as corroboration and overstates the evidence.
+
+**Alternatives considered.** (a) Fix only the sentence. (b) Drop `symptom_severity` from
+user-facing findings entirely. (c) Skip the finding when the comparison could not be made, and
+describe and quantify the ones that remain as intensities.
+
+**Reason.** (c).
+
+(a) leaves the numbers beside the sentence unchanged, so "intensity was lower" would still sit
+above two occurrence percentages. That is the same defect wearing better words.
+
+(b) discards a real signal. When both groups do report the symptom, a difference in how strongly
+it was reported is a genuine, distinct observation — and one a user would want.
+
+**Consequences.** The skip lives in `analyse` rather than at the screen, which keeps the §21
+breadth correction honest: it corrects for how many questions were asked, and a question that
+could not be answered was not one of them. The sample report went from 18 comparisons to 12, and
+its three duplicate "intensity" findings disappeared.
+
+`comparisonNumbers()` now derives both figures from the finding's outcome kind, and the card, the
+detail screen and the printed report all read from it. The card previously built its own headline
+and its own figures, so it carried a second copy of the frequency wording; it now uses
+`observationSentence` like everything else. The joining word is part of that function's output,
+because "6.5 out of 10 of 18 days" is not English and three surfaces getting that agreement right
+independently is three chances to get it wrong.
+
+**What this does not fix.** `status` and `confidence` are still scored from `absoluteDifference`
+for every outcome kind, so a large difference in intensity between two groups that report the
+symptom equally often is scored `no_clear_pattern`. The finding is described correctly when shown;
+the ranking does not yet know what it is ranking. Scoring severity from `meanSeverityDifference`
+on its own scale is a methodology change that needs its own ADR and fixture scenarios, and is
+recorded in `PATTERN_ENGINE.md` §6 as a known limitation rather than silently left out.
+

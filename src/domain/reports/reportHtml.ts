@@ -19,8 +19,8 @@
 import type { Finding } from '@/domain/pattern-engine/types';
 import type { TrendSeries } from '@/domain/patterns/trends';
 import {
+  comparisonNumbers,
   confidenceWord,
-  exposurePhrases,
   formatLocalDate,
   observationSentence,
   thingsToConsider,
@@ -214,19 +214,18 @@ function bowelSection(report: AppointmentReport): string {
  * can correct afterwards.
  */
 function findingHtml(finding: Finding): string {
-  const { present, absent } = exposurePhrases(finding.factor);
-  const metrics = finding.metrics;
   const considerations = thingsToConsider(finding);
+  // The figures come from the same place as the sentence above them, so an intensity finding is
+  // explained with intensities rather than with occurrence percentages that were never about it.
+  const numbers = comparisonNumbers(finding);
 
   return `
     <div class="finding">
       <p class="status">${escapeHtml(PATTERN_STATUS_COPY[finding.status].label)}</p>
       <p>${escapeHtml(observationSentence(finding))}</p>
       <p class="note">
-        ${escapeHtml(Math.round(metrics.exposedOutcomeRate * 100))}% of
-        ${escapeHtml(metrics.exposedCount)} ${escapeHtml(present)}, against
-        ${escapeHtml(Math.round(metrics.controlOutcomeRate * 100))}% of
-        ${escapeHtml(metrics.controlCount)} ${escapeHtml(absent)}.
+        ${escapeHtml(numbers.exposed.summary)}, against
+        ${escapeHtml(numbers.control.summary)}.
         Confidence: ${escapeHtml(confidenceWord(finding.confidence))}.
       </p>
       ${considerations.map((line) => `<p class="note">${escapeHtml(line)}</p>`).join('')}

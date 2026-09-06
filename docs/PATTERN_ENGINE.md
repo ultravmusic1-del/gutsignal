@@ -157,6 +157,30 @@ Spec §57. Reported per factor–outcome pair.
 - A 95% uncertainty band on the difference
 - Week-to-week consistency
 
+### A severity outcome needs a mean on both sides
+
+A `symptom_severity` comparison is only emitted when **both** groups have a mean to compare. When
+the symptom never occurred in one group there is nothing to average there, so the intensity
+question was never actually answered.
+
+The engine used to emit a finding anyway. Because a severity finding's rate metrics are the
+_occurrence_ metrics, that finding was a copy of the `symptom_occurrence` finding beside it,
+labelled "intensity" — two findings resting on one measurement, reading as though they
+corroborated each other. It also consumed a slot in the breadth correction below, making every
+genuine finding look weaker to pay for a question that was never asked. On the sample diary this
+removed six of eighteen comparisons.
+
+> ### ⚠ A severity finding's status still comes from the occurrence difference
+>
+> `status` and `confidence` are scored from `absoluteDifference` — the difference in how often the
+> symptom occurred — for every outcome kind, including `symptom_severity`. So a large difference in
+> _intensity_ between two groups that report the symptom equally often is currently scored as
+> `no_clear_pattern`.
+>
+> The finding is described correctly when it is shown; it is the ranking that does not yet know
+> what it is ranking. Changing it means scoring severity from `meanSeverityDifference` on its own
+> scale, which is a methodology change and belongs in an ADR with the fixtures to match.
+
 ### Uncertainty
 
 **Wilson score intervals** per group, combined by **Newcombe's method** for the difference.

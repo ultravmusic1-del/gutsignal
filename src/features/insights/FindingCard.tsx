@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
-import { OUTCOME_LABELS } from '@/domain/patterns/outcomeLabels';
+import { comparisonNumbers, observationSentence } from '@/domain/patterns/findingDetail';
 import { PATTERN_STATUS_COPY } from '@/domain/patterns/status';
 import type { Finding } from '@/domain/pattern-engine/types';
 import { useTheme } from '@/theme';
@@ -24,23 +24,17 @@ type Props = {
   onPress?: (finding: Finding) => void;
 };
 
-/** "7 in 10 days" reads better than "70%" for the small numbers a diary produces. */
-function asPercentage(rate: number): string {
-  return `${Math.round(rate * 100)}%`;
-}
-
 function FindingCardComponent({ finding, onPress }: Props) {
   const theme = useTheme();
 
   const status = PATTERN_STATUS_COPY[finding.status];
-  const outcome = OUTCOME_LABELS[finding.outcome.kind](finding.outcome.symptomType);
 
-  const { exposedOutcomeRate, controlOutcomeRate, exposedCount, controlCount } = finding.metrics;
-  const moreOften = finding.metrics.absoluteDifference > 0;
-
-  // Association language, and only association language. "Followed" describes the order things
-  // were recorded in; it does not claim one produced the other.
-  const headline = `${outcome} was recorded ${moreOften ? 'more' : 'less'} often on days with ${finding.factor.label.toLocaleLowerCase()}`;
+  // Association language, and only association language — and phrased by the same function the
+  // detail screen and the report use. This card built its own sentence, which meant it carried
+  // its own copy of the frequency wording and described an intensity finding as something
+  // "recorded more often", a thing an intensity cannot be.
+  const headline = observationSentence(finding);
+  const numbers = comparisonNumbers(finding);
 
   const body = (
     <Card>
@@ -56,10 +50,7 @@ function FindingCardComponent({ finding, onPress }: Props) {
             evidence, and this product's whole promise is that the evidence is visible. */}
         <View style={{ gap: 2 }}>
           <Text variant="caption" color="secondary">
-            {asPercentage(exposedOutcomeRate)} of {exposedCount}{' '}
-            {exposedCount === 1 ? 'day' : 'days'} with {finding.factor.label.toLocaleLowerCase()},
-            versus {asPercentage(controlOutcomeRate)} of {controlCount}{' '}
-            {controlCount === 1 ? 'day' : 'days'} without.
+            {numbers.exposed.summary}, versus {numbers.control.summary}.
           </Text>
 
           {finding.metrics.unknownCount > 0 ? (

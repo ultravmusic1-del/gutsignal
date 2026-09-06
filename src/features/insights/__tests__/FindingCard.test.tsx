@@ -59,7 +59,9 @@ describe('FindingCard', () => {
   it('states the association without claiming a cause', async () => {
     await renderWithTheme(<FindingCard finding={aFinding()} />);
 
-    expect(screen.getByText(/Bloating was recorded more often on days with dairy/i)).toBeTruthy();
+    expect(
+      screen.getByText(/Bloating was recorded more often on days when you logged dairy/i)
+    ).toBeTruthy();
     expect(screen.queryByText(/caused/i)).toBeNull();
     expect(screen.queryByText(/because of/i)).toBeNull();
   });
@@ -76,7 +78,7 @@ describe('FindingCard', () => {
 
     await renderWithTheme(<FindingCard finding={finding} />);
 
-    expect(screen.getByText(/was recorded less often on days with dairy/i)).toBeTruthy();
+    expect(screen.getByText(/was recorded less often on days when you logged dairy/i)).toBeTruthy();
   });
 
   // The whole promise of this product is that the evidence is visible. A rate without its
@@ -140,5 +142,45 @@ describe('FindingCard', () => {
     fireEvent.press(card);
 
     expect(onPress).toHaveBeenCalledWith(finding);
+  });
+});
+
+/**
+ * An intensity is not a frequency, on this surface either.
+ *
+ * The card used to build its own headline and its own figures, so it described a severity
+ * finding as something "recorded more often" and quantified it with the occurrence rate. It now
+ * reads both from the same place the detail screen and the printed report do.
+ */
+describe('FindingCard — severity findings', () => {
+  const aSeverityFinding = () => {
+    const base = aFinding();
+    return {
+      ...base,
+      outcome: { kind: 'symptom_severity' as const, symptomType: 'bloating' },
+      metrics: {
+        ...base.metrics,
+        exposedMeanSeverity: 7.4,
+        controlMeanSeverity: 3.1,
+        meanSeverityDifference: 4.3,
+      },
+    };
+  };
+
+  it('describes intensity as higher, never as more often', async () => {
+    await renderWithTheme(<FindingCard finding={aSeverityFinding()} />);
+
+    expect(screen.getByText(/Bloating intensity was higher/i)).toBeTruthy();
+    expect(screen.queryByText(/more often/i)).toBeNull();
+  });
+
+  it('shows the two averages rather than occurrence percentages', async () => {
+    await renderWithTheme(<FindingCard finding={aSeverityFinding()} />);
+
+    expect(screen.getByText(/7.4 out of 10 across 12 days/i)).toBeTruthy();
+    expect(screen.getByText(/3.1 out of 10 across 18 days/i)).toBeTruthy();
+    // 75% / 25% are the occurrence rates on this fixture and must not appear on an intensity card.
+    expect(screen.queryByText(/75%/)).toBeNull();
+    expect(screen.queryByText(/25%/)).toBeNull();
   });
 });

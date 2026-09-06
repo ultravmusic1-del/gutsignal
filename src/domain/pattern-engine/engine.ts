@@ -136,6 +136,16 @@ export function analyse({
     for (const outcome of scannedOutcomes) {
       const observations = buildObservations(days, factor, outcome);
       const metrics = compare(observations);
+
+      // A severity comparison needs a mean on both sides. When the symptom never occurred in one
+      // group there is nothing to average there, so the intensity question was never answered —
+      // and a finding emitted anyway would carry the *occurrence* rate under an intensity label,
+      // duplicating the occurrence finding beside it. Two findings resting on one measurement
+      // read as corroboration and overstate the evidence (§18). Skipping here rather than at the
+      // screen also keeps the breadth correction honest: §21 corrects for how many questions were
+      // asked, and a question that could not be answered was not one of them.
+      if (outcome.kind === 'symptom_severity' && metrics.meanSeverityDifference === null) continue;
+
       const consistency = weeklyConsistency(observations, metrics.absoluteDifference);
 
       const assessment = assessConfidence({

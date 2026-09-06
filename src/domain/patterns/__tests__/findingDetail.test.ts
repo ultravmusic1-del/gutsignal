@@ -6,6 +6,7 @@ import type { Factor, Finding } from '@/domain/pattern-engine/types';
 
 import {
   calculationSteps,
+  comparisonNumbers,
   confidenceWord,
   encodeFindingId,
   exposurePhrases,
@@ -280,5 +281,134 @@ describe('formatLocalDate', () => {
 
   it('returns the input unchanged if it is not a local date', () => {
     expect(formatLocalDate('nonsense')).toBe('nonsense');
+  });
+});
+
+/**
+ * Intensity is not frequency.
+ *
+ * `symptom_severity` is labelled "Bloating intensity" but was described with the occurrence
+ * template — "was recorded less often" — and quantified with the occurrence rate. That is a
+ * category error: an intensity is higher or lower, not more or less frequent. Worse, it made the
+ * severity finding read as a near-copy of the occurrence finding beside it, so one measurement
+ * looked like two agreeing ones.
+ */
+describe('what we observed — severity outcomes', () => {
+  function aSeverityFinding(meanSeverityDifference: number | null): Finding {
+    const base = aFinding();
+    return {
+      ...base,
+      outcome: { kind: 'symptom_severity', symptomType: 'bloating' },
+      metrics: {
+        ...base.metrics,
+        exposedMeanSeverity: 6.5,
+        controlMeanSeverity: 6.5 - (meanSeverityDifference ?? 0),
+        meanSeverityDifference,
+      },
+    };
+  }
+
+  it('says higher, not more often, when intensity was greater on exposed days', () => {
+    const sentence = observationSentence(aSeverityFinding(1.4));
+
+    expect(sentence).toContain('Bloating intensity');
+    expect(sentence).toContain('higher');
+    expect(sentence).not.toContain('more often');
+    expect(sentence).not.toContain('recorded');
+  });
+
+  it('says lower when intensity was smaller on exposed days', () => {
+    const sentence = observationSentence(aSeverityFinding(-1.1));
+
+    expect(sentence).toContain('lower');
+    expect(sentence).not.toContain('less often');
+  });
+
+  it('does not force a direction when the means came out even', () => {
+    expect(observationSentence(aSeverityFinding(0))).toContain('about the same');
+  });
+
+  it('still claims no cause', () => {
+    expect(observationSentence(aSeverityFinding(1.4))).not.toMatch(
+      /caus|trigger|because|due to|leads to/i
+    );
+  });
+});
+
+/**
+ * The figures shown beside a sentence must be the figures that sentence is about.
+ *
+ * Every surface — the card, the detail screen, the printed report — rendered
+ * `exposedOutcomeRate`/`controlOutcomeRate` regardless of outcome kind, so an intensity finding
+ * was explained with occurrence percentages. A clinician reading the report would take those
+ * percentages to be about intensity, which they never were.
+ */
+describe('the two numbers behind a finding', () => {
+  it('gives percentages for an occurrence outcome', () => {
+    const numbers = comparisonNumbers(aFinding());
+
+    expect(numbers.exposed.value).toBe('46%');
+    expect(numbers.control.value).toBe('27%');
+    expect(numbers.exposed.days).toBe(18);
+    expect(numbers.control.days).toBe(22);
+    expect(numbers.exposed.label).toBe('days when you logged dairy');
+  });
+
+  it('gives mean intensities for a severity outcome, never percentages', () => {
+    const base = aFinding();
+    const finding: Finding = {
+      ...base,
+      outcome: { kind: 'symptom_severity', symptomType: 'bloating' },
+      metrics: {
+        ...base.metrics,
+        exposedMeanSeverity: 6.5,
+        controlMeanSeverity: 4.2,
+        meanSeverityDifference: 2.3,
+      },
+    };
+
+    const numbers = comparisonNumbers(finding);
+
+    expect(numbers.exposed.value).toBe('6.5 out of 10');
+    expect(numbers.control.value).toBe('4.2 out of 10');
+    expect(numbers.exposed.value).not.toContain('%');
+    expect(numbers.control.value).not.toContain('%');
+  });
+});
+
+describe('the whole phrase for one group', () => {
+  it('joins a rate to its days with "of"', () => {
+    const numbers = comparisonNumbers(aFinding());
+
+    expect(numbers.exposed.summary).toBe('46% of 18 days when you logged dairy');
+    expect(numbers.control.summary).toBe('27% of 22 days when you did not');
+  });
+
+  // "6.5 out of 10 of 18 days" is not English. An average is across days, not of them.
+  it('joins an average to its days with "across"', () => {
+    const base = aFinding();
+    const numbers = comparisonNumbers({
+      ...base,
+      outcome: { kind: 'symptom_severity', symptomType: 'bloating' },
+      metrics: {
+        ...base.metrics,
+        exposedMeanSeverity: 6.5,
+        controlMeanSeverity: 4.2,
+        meanSeverityDifference: 2.3,
+      },
+    });
+
+    expect(numbers.exposed.summary).toBe('6.5 out of 10 across 18 days when you logged dairy');
+    expect(numbers.control.summary).toBe('4.2 out of 10 across 22 days when you did not');
+  });
+
+  it('does not say "1 days"', () => {
+    const base = aFinding();
+    const numbers = comparisonNumbers({
+      ...base,
+      metrics: { ...base.metrics, exposedCount: 1 },
+    });
+
+    expect(numbers.exposed.summary).toContain('1 day when you logged dairy');
   });
 });

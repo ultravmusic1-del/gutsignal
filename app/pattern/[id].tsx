@@ -5,8 +5,8 @@ import { Pressable, View } from 'react-native';
 import { Card, Divider, EmptyState, Screen, Text } from '@/components/ui';
 import {
   calculationSteps,
+  comparisonNumbers,
   confidenceWord,
-  exposurePhrases,
   findByFindingId,
   formatLocalDate,
   nextStep,
@@ -77,7 +77,7 @@ export default function PatternDetailScreen() {
 
   const status = PATTERN_STATUS_COPY[finding.status];
   const considerations = thingsToConsider(finding);
-  const { present, absent } = exposurePhrases(finding.factor);
+  const numbers = comparisonNumbers(finding);
   const steps = calculationSteps(finding);
 
   return (
@@ -102,19 +102,20 @@ export default function PatternDetailScreen() {
 
               <Divider />
 
-              {/* The two rates side by side, each labelled with the group it came from and the
-                  number of days behind it. A percentage without its denominator is a claim
-                  without its evidence. */}
+              {/* The two figures side by side, each labelled with the group it came from and the
+                  number of days behind it. A figure without its denominator is a claim without
+                  its evidence — and what the figure is (a rate, or an average intensity) follows
+                  the outcome rather than being assumed. */}
               <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-                <RateColumn
-                  label={`On ${present}`}
-                  rate={finding.metrics.exposedOutcomeRate}
-                  days={finding.metrics.exposedCount}
+                <ValueColumn
+                  label={`On ${numbers.exposed.label}`}
+                  value={numbers.exposed.value}
+                  days={numbers.exposed.days}
                 />
-                <RateColumn
-                  label={`On ${absent}`}
-                  rate={finding.metrics.controlOutcomeRate}
-                  days={finding.metrics.controlCount}
+                <ValueColumn
+                  label={`On ${numbers.control.label}`}
+                  value={numbers.control.value}
+                  days={numbers.control.days}
                 />
               </View>
 
@@ -235,12 +236,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function RateColumn({ label, rate, days }: { label: string; rate: number; days: number }) {
+/**
+ * One side of the comparison.
+ *
+ * Takes an already-formatted value rather than a rate: what the figure *is* depends on the
+ * outcome, and this column used to assume it was always a percentage — which rendered an
+ * intensity finding as one.
+ */
+function ValueColumn({ label, value, days }: { label: string; value: string; days: number }) {
   const theme = useTheme();
 
   return (
     <View style={{ flex: 1, gap: 2 }}>
-      <Text variant="metric">{Math.round(rate * 100)}%</Text>
+      <Text variant="metric">{value}</Text>
       <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing.xxs }}>
         {label}
       </Text>

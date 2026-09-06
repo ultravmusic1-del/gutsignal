@@ -116,11 +116,85 @@ export function observationSentence(finding: Finding): string {
   const outcome = outcomeLabel(finding.outcome.kind, finding.outcome.symptomType);
   const { present, absent } = exposurePhrases(finding.factor);
 
+  // Intensity is not frequency. Every other outcome is a thing that either happened or did not,
+  // so "recorded more often" describes it exactly; a severity is a number that is higher or
+  // lower, and describing it as a frequency would state something the engine never measured.
+  // The engine only emits a severity finding when both groups have a mean (see engine.ts), so
+  // `meanSeverityDifference` is the figure this sentence is actually about.
+  if (finding.outcome.kind === 'symptom_severity') {
+    const difference = finding.metrics.meanSeverityDifference ?? 0;
+
+    if (difference === 0) return `${outcome} was about the same on ${present} as on ${absent}.`;
+
+    return `${outcome} was ${difference > 0 ? 'higher' : 'lower'} on ${present} than on ${absent}.`;
+  }
+
   const difference = finding.metrics.absoluteDifference;
   const direction =
     difference > 0 ? 'more often' : difference < 0 ? 'less often' : 'about as often';
 
   return `${outcome} was recorded ${direction} on ${present} than on ${absent}.`;
+}
+
+/** One side of the comparison, formatted for whatever was actually measured. */
+export type ComparisonGroup = {
+  /** The headline figure: `46%` for an occurrence, `6.5 out of 10` for an intensity. */
+  value: string;
+  /** How many days it was computed from. A figure without its denominator is not evidence. */
+  days: number;
+  /** Which days those were, e.g. `days when you logged dairy`. */
+  label: string;
+  /**
+   * The whole phrase: `46% of 18 days when you logged dairy`.
+   *
+   * Assembled here because the joining word depends on what was measured — a rate is *of* a
+   * number of days, an average is *across* them — and three surfaces getting that agreement
+   * right independently is three chances to get it wrong.
+   */
+  summary: string;
+};
+
+export type ComparisonNumbers = { exposed: ComparisonGroup; control: ComparisonGroup };
+
+/**
+ * The two figures a finding's sentence is about.
+ *
+ * This exists because the card, the detail screen and the printed report each reached for
+ * `exposedOutcomeRate`/`controlOutcomeRate` directly, which is right for five outcome kinds and
+ * wrong for the sixth: an intensity finding was explained with occurrence percentages. Reading
+ * the shape of the finding in one place means the numbers cannot disagree with the words beside
+ * them on one surface and agree on another.
+ */
+export function comparisonNumbers(finding: Finding): ComparisonNumbers {
+  const { metrics } = finding;
+  const { present, absent } = exposurePhrases(finding.factor);
+  const { exposedMeanSeverity, controlMeanSeverity } = metrics;
+
+  // Narrowed with an explicit branch rather than a boolean flag: a flag would leave both means
+  // typed `number | null` and force a non-null assertion, which is exactly the kind of "trust me"
+  // that this file should not contain.
+  const group = (value: string, days: number, label: string, joiner: string): ComparisonGroup => ({
+    value,
+    days,
+    label,
+    summary: `${value} ${joiner} ${days} ${days === 1 ? 'day' : 'days'}${label.replace(/^days/, '')}`,
+  });
+
+  if (
+    finding.outcome.kind === 'symptom_severity' &&
+    exposedMeanSeverity !== null &&
+    controlMeanSeverity !== null
+  ) {
+    return {
+      exposed: group(asIntensity(exposedMeanSeverity), metrics.exposedCount, present, 'across'),
+      control: group(asIntensity(controlMeanSeverity), metrics.controlCount, absent, 'across'),
+    };
+  }
+
+  return {
+    exposed: group(asPercentage(metrics.exposedOutcomeRate), metrics.exposedCount, present, 'of'),
+    control: group(asPercentage(metrics.controlOutcomeRate), metrics.controlCount, absent, 'of'),
+  };
 }
 
 /**
@@ -180,6 +254,14 @@ export function formatLocalDate(localDate: string): string {
 }
 
 const asPercentage = (rate: number) => `${Math.round(rate * 100)}%`;
+
+/**
+ * A mean severity, on the 1–10 scale the user entered it on.
+ *
+ * The scale is carried in the string rather than assumed: "6.5" alone invites being read as a
+ * percentage or a count, which is the confusion this whole change exists to remove.
+ */
+const asIntensity = (mean: number) => `${Number(mean.toFixed(1))} out of 10`;
 
 /**
  * The working, shown in full.
