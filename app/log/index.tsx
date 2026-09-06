@@ -1,11 +1,27 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Card, Screen, Text } from '@/components/ui';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useLogWellbeing } from '@/features/logs/useSimpleLogs';
+import { track } from '@/services/analytics/analytics';
+import { ANALYTICS_EVENT_SCHEMAS, type AnalyticsProperties } from '@/services/analytics/events';
 import { useTheme } from '@/theme';
+
+type EntryPoint = AnalyticsProperties<'log_sheet_opened'>['entryPoint'];
+
+/**
+ * Where the sheet was opened from, validated rather than trusted.
+ *
+ * Route params arrive as strings from a URL and can be anything. Parsing through the event's own
+ * schema means the allowlist stays the single definition of what is permitted, and an unrecognised
+ * value falls back to the control that actually exists rather than being reported verbatim.
+ */
+function entryPointFrom(raw: string | undefined): EntryPoint {
+  const parsed = ANALYTICS_EVENT_SCHEMAS.log_sheet_opened.safeParse({ entryPoint: raw });
+  return parsed.success ? parsed.data.entryPoint : 'nav';
+}
 
 type LogRoute = '/log/symptom' | '/log/meal' | '/log/bowel' | '/log/context';
 
@@ -91,6 +107,23 @@ export default function LogSheet() {
   const logWellbeing = useLogWellbeing();
   const [error, setError] = useState<string | null>(null);
 
+  const entryPoint = entryPointFrom(useLocalSearchParams<{ entryPoint?: string }>().entryPoint);
+
+  // Whether the user ever picked something. Set once and never reset: tapping Meal and then
+  // cancelling the meal form is engagement with *this* sheet, and the abandonment happened one
+  // screen further in.
+  const choseAction = useRef(false);
+
+  useEffect(() => {
+    track('log_sheet_opened', { entryPoint });
+
+    // Unmount, not blur. Pushing a logging screen leaves this sheet mounted underneath, so a blur
+    // would count every successful log as a dismissal — the opposite of what this measures.
+    return () => {
+      if (!choseAction.current) track('log_sheet_dismissed', { entryPoint });
+    };
+  }, [entryPoint]);
+
   const recordFeelingGood = async () => {
     setError(null);
 
@@ -103,11 +136,20 @@ export default function LogSheet() {
   };
 
   const handlerFor = (action: LogAction): (() => void) | undefined => {
-    if (action.immediate) return () => void recordFeelingGood();
+    if (action.immediate)
+      return () => {
+        choseAction.current = true;
+        void recordFeelingGood();
+      };
+
     if (action.route) {
       const route = action.route;
-      return () => router.push(route);
+      return () => {
+        choseAction.current = true;
+        router.push(route);
+      };
     }
+
     return undefined;
   };
 

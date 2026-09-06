@@ -19,7 +19,10 @@ export default function TabsLayout() {
           destinations={TAB_DESTINATIONS}
           activeKey={state.routes[state.index]?.name ?? 'today'}
           onSelect={(key) => navigation.navigate(key)}
-          onLogPress={() => router.push('/log')}
+          // The floating + is the only way into the log sheet today, so 'nav' is the whole truth.
+          // The other entry points in the enum become reachable when Today and Timeline get their
+          // own log affordances.
+          onLogPress={() => router.push({ pathname: '/log', params: { entryPoint: 'nav' } })}
         />
       )}
     >

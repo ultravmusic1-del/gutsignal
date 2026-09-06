@@ -8,12 +8,15 @@ import {
   editRouteFor,
   groupByLocalDate,
   type LogEntry,
+  type TimelineFilterKey,
 } from '@/domain/logs/entry';
 import { formatDayHeading } from '@/domain/time/occurrence';
+import { useSettledEvent } from '@/features/analytics/useSettledEvent';
 import { todayLocalDate } from '@/features/logs/useSymptomLogs';
 import { TimelineEntryRow } from '@/features/timeline/TimelineEntryRow';
 import { useDeleteEntry, useTimeline, useTimelineCount } from '@/features/timeline/useTimeline';
 import { useTimelineFilters } from '@/state/timelineFilters';
+import { track } from '@/services/analytics/analytics';
 import { useTheme } from '@/theme';
 
 /**
@@ -32,6 +35,18 @@ export default function TimelineScreen() {
 
   const { filter, search, setFilter, setSearch } = useTimelineFilters();
   const selected = TIMELINE_FILTERS.find((option) => option.key === filter) ?? TIMELINE_FILTERS[0];
+
+  // Reported when the typing settles, never per keystroke, and the text itself never leaves the
+  // hook — the event is property-free because a search string is something a person typed about
+  // their own health (§29).
+  useSettledEvent('timeline_searched', search);
+
+  const changeFilter = (key: TimelineFilterKey) => {
+    // Re-tapping the chip you are already on is not a filter change, and counting it would make
+    // the number a measure of fidgeting.
+    if (key !== filter) track('timeline_filtered');
+    setFilter(key);
+  };
 
   const timeline = useTimeline({ kind: selected.kind, search });
   const totalEntries = useTimelineCount();
@@ -101,7 +116,7 @@ export default function TimelineScreen() {
             key={option.key}
             label={option.label}
             selected={filter === option.key}
-            onPress={() => setFilter(option.key)}
+            onPress={() => changeFilter(option.key)}
           />
         ))}
       </ScrollView>
