@@ -120,8 +120,18 @@ jobs:
         with:
           version: latest
 
-      - name: Start local Supabase
-        run: supabase start
+      # Only the database is needed. Everything excluded here is a container this job never talks
+      # to — Studio, the REST and auth servers, storage, the edge runtime, log shipping — and every
+      # one of them binds a host port. The first run of this job failed with
+      # "failed to bind host port for 0.0.0.0:54322: address already in use", so starting eleven
+      # services to run one SQL file was both slow and a source of flakes.
+      #
+      # `auth.users` and the roles come from the database image itself, not from gotrue running, so
+      # the migrations and the RLS suite have everything they need without it.
+      - name: Start local Supabase (database only)
+        run: |
+          supabase stop --no-backup 2>/dev/null || true
+          supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 
       # Applies every migration in order against an empty database. `auth.users`, the roles and
       # the extensions come from the local stack, which is why this runs against Supabase rather
