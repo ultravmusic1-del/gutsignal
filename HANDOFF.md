@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 21** · Update the date and loop number every
+Last updated: **2026-09-06, loop 22** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 51 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 53 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **906 passing**, 54 suites                                       |
+| Tests             | **937 passing**, 56 suites                                       |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -257,22 +257,22 @@ been buildable is the part that has to exist **before** anything depends on it.
 
 **Pick up here:**
 
-1. **The remaining screen events.** Loop 21 built `features/analytics/useScreenView.ts` + 7 tests —
-   reports **once per focus**, guarded by a ref that resets when focus is lost, and **waits** for
-   properties that are not known at focus time (`null` means "not yet"). Already wired:
-   `insights_viewed`, `pattern_detail_opened`, `pattern_calculation_expanded` (on the way open
-   only), and `app_opened`, which fires **after the database opens** rather than on mount — an app
-   whose storage will not open did not launch, and counting it would hide the failure worth
-   measuring.
-   **Still uncalled:** `onboarding_started` / `onboarding_step_completed` / `onboarding_completed`,
-   `log_sheet_opened` / `log_sheet_dismissed`, `timeline_searched` / `timeline_filtered`,
-   `sync_failed`.
-   Two need plumbing rather than a hook call: `log_sheet_opened` takes an `entryPoint` the sheet
-   does not receive — pass it as a route param from the caller rather than guessing inside the
-   sheet — and `sync_failed` takes a fixed `reason` enum, so `syncEngine` needs to classify its
-   failures rather than hand over an error message.
-   `timeline_searched` should fire on a **debounced settled query**, not per keystroke; it is
-   property-free, so use `track` directly rather than `useScreenView`.
+1. **The last four analytics events.** The reporting machinery is all built:
+   `features/analytics/useScreenView.ts` reports **once per focus** and **waits** for properties
+   not known at focus time (`null` means "not yet"), and `services/sync/failureReason.ts`
+   classifies a failure into the four words `sync_failed` accepts.
+   **Already wired:** `app_opened` (after the database opens, not on mount — an app whose storage
+   will not open did not launch), `insights_viewed`, `pattern_detail_opened`,
+   `pattern_calculation_expanded`, `sync_failed`, and the whole onboarding funnel.
+   **Still uncalled:** `log_sheet_opened` / `log_sheet_dismissed` and `timeline_searched` /
+   `timeline_filtered`.
+   `log_sheet_opened` takes an `entryPoint` the sheet does not receive — pass it as a route param
+   from the caller (the floating + button and Today both open it) rather than guessing inside the
+   sheet. `log_sheet_dismissed` is the harder half: a native form sheet can be dragged away
+   without any code of ours running, so find the dismissal callback rather than inferring it from
+   a blur, and if there is no honest signal, leave the event uncalled and say so.
+   `timeline_searched` should fire on a **debounced settled query**, never per keystroke; it is
+   property-free, so call `track` directly rather than `useScreenView`.
 2. **The Sentry seam.** `components/ErrorBoundary.tsx` has an `onCapture` prop whose comment says
    M16 wires it to Sentry. No DSN exists, so build the **scrubber** — the function deciding what a
    report may contain — behind the same sink shape as analytics, and test it against §30's list.
@@ -388,6 +388,7 @@ Append one line per loop. Keep it short and factual.
 | 19   | Another account's local data is cleared when someone else signs in — a §58 cross-user hole, closed.     | 885 tests, verify green, bundle builds |
 | 20   | Sign-out flushes, counts and warns before discarding anything unsent (§15). §4 tidied of loop drift.    | 899 tests, verify green, bundle builds |
 | 21   | `useScreenView` — once per focus, waits for its data. Wired to 4 events. Lint now 0 errors, 0 warnings. | 906 tests, verify green, bundle builds |
+| 22   | `sync_failed` classified into four safe words, never a message; onboarding funnel from one frame.       | 937 tests, verify green, bundle builds |
 
 ---
 
@@ -482,6 +483,16 @@ One consequence worth knowing: sign-out now waits on the network before showing 
 so on a bad connection the button spins for as long as a sync attempt takes. It is the only place
 in the app that waits on the network at all, and it does so because it is the last moment the
 person whose entries these are is still present.
+
+#### 🟡 One onboarding judgement call, easy to reverse
+
+A **skipped** onboarding step is not counted as `onboarding_step_completed`. Skipping does move
+someone past a step, so counting it would make the funnel look healthier — but the event says
+"completed", and a skip is a different thing a person did. If you want skips measured, that is a
+new event rather than a loosening of this one; say so and it takes ten minutes.
+
+It is reported from `OnboardingStep`, the frame all six screens share, so the funnel cannot drift
+as steps are added or reordered.
 
 #### 🟡 The analytics event list is a product decision, and it is now written down
 
