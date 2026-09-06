@@ -1,6 +1,6 @@
 # GutSignal — Project Status & Hardening Plan
 
-**Updated:** 2026-09-06 · **Branch:** `main` @ `7df27d7` · **Source of truth for project state.**
+**Updated:** 2026-09-06 · **Branch:** `main` @ `c3f39cb` · **Source of truth for project state.**
 
 This file exists because status was drifting across `README.md`, `HANDOFF.md` and
 `PROJECT_PLAN.md`, and stale status is worse here than on an ordinary team: it actively directs
@@ -15,13 +15,13 @@ Everything below was run on 2026-09-06, not inferred.
 | Check                              | Result                                          |
 | ---------------------------------- | ----------------------------------------------- |
 | `npm run verify:full`              | green end to end — the same commands CI runs    |
-| `npm test`                         | **1201 tests, 72 suites** — pass                |
+| `npm test`                         | **1245 tests, 75 suites** — pass                |
 | `npx expo-doctor`                  | **21/21**                                       |
-| `npm run export:ios`               | bundles, **including Hermes bytecode** (5.8 MB) |
+| `npm run export:ios`               | bundles, **including Hermes bytecode** (5.9 MB) |
 | RLS isolation suite (live project) | **67 assertions** pass, no leftover rows        |
 | Supabase security advisor          | no lints                                        |
 | `npm audit --audit-level=high`     | passes — 14 moderate, 0 high/critical           |
-| CI (`.github/workflows/ci.yml`)    | **green** — all three jobs, run 34033313830     |
+| CI (`.github/workflows/ci.yml`)    | **green** — all three jobs, run 34049663895     |
 
 > The Hermes bytecode step now works locally. Windows Smart App Control had been blocking that
 > binary as not-yet-reputable (ADR-0038); the block lapsed on its own, as expected. `--no-bytecode`
@@ -32,16 +32,33 @@ bidirectional sync, timeline with filter/search/edit/delete, the deterministic p
 confounders and breadth control, Insights, Gut Map, trends, appointment reports, diary export
 domain logic, the analytics wall, the crash scrubber, and account deletion end to end.
 
-### The one fact that governs the next phase
+### The one fact that governed the last phase, and what it cost
 
-**GutSignal has never run on a physical iPhone.** `expo export` proves Metro can build a bundle.
-It proves nothing about entitlements, SecureStore, Sign in with Apple, native sheets, Reanimated,
-the SQLite native module, app lifecycle, release-mode behaviour, or signing.
+**GutSignal now runs on a physical iPhone**, in Expo Go, as of 2026-09-06. That is the first time,
+and it took four defects to get there — every one of them invisible to 1200 passing tests, a clean
+typecheck and a full iOS bundle:
 
-This is not theoretical. In Milestone 6, `log/meal` was never registered in the root navigator, so
-it opened as a full-screen push instead of a sheet — and **typecheck, lint, 292 tests and a full
-iOS bundle all passed while it was broken.** There is now a regression test for that specific
-class, but the general lesson stands: _test existence is not test evidence._
+1. **`openDatabase` migrated concurrently.** It memoized the resolved handle, so during the open
+   itself it memoized nothing. Twenty call sites raced, `expo-sqlite` gave each the same native
+   connection, and overlapping `BEGIN`s gave `cannot start a transaction within a transaction`.
+   The app never got past its boot screen. ADR-0046.
+2. **A failed open leaked the connection**, and `expo-sqlite` refuses to delete an open database —
+   so the boot screen's recovery button could not work either.
+3. **The recovery button swallowed its own error**, making a real failure look like a dead button.
+4. **`(auth)` and `(onboarding)` were groups with no `_layout`**, so twelve screens were
+   registered nowhere while the root declared two routes that matched nothing.
+
+Nothing on this list is exotic. Every one needed a device, or a test written to model what the
+device actually does — which is now the standard the database tests are held to: `serialize.test.ts`
+and `database.test.ts` run against a connection reproducing `expo-sqlite`'s real transaction
+semantics over a real SQL engine, and each shows its scenario failing without the fix.
+
+The older lesson stands unchanged. In Milestone 6, `log/meal` was never registered in the root
+navigator, so it opened as a full-screen push instead of a sheet — and **typecheck, lint, 292 tests
+and a full iOS bundle all passed while it was broken.** _Test existence is not test evidence._
+
+**Still unproven on device:** a development build (Expo Go is not the same binary), entitlements,
+SecureStore, Sign in with Apple, release-mode behaviour, and signing. Section 5 is still the gate.
 
 ---
 
@@ -60,6 +77,14 @@ Do not re-open these; they are done and verified.
   valid SQL and _nothing_ in it had ever run. ADR-0041.
 - **Account deletion**, server and client, with no target-user parameter. ADR-0042.
 - **`pattern_findings`** migration applied, RLS on, covered by the isolation suite.
+- **Local writes serialised.** Beyond the boot crash, the sync engine's untransacted writes — an
+  outbox row cleared, a cursor advanced, on a timer — were joining whatever transaction the user's
+  save happened to have open, so a rolled-back meal took sync progress with it and the record
+  uploaded twice. Every operation on the connection now goes through one queue and the raw handle
+  never reaches application code. ADR-0046.
+- **Route groups are navigators.** `(auth)` and `(onboarding)` have `_layout.tsx` files, and the
+  registration test derives its rule from where the layouts are rather than assuming a
+  parenthesised directory owns its children.
 
 ---
 

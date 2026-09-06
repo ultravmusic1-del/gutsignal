@@ -14,7 +14,6 @@ import type { ContextDraft } from '@/domain/logs/context';
 import type { WellbeingDraft } from '@/domain/logs/wellbeing';
 import { migrate } from '@/services/db/migrator';
 import { createTestDatabase, type TestDatabase } from '@/services/db/nodeSqlite.testing';
-import type { SqlBindValue, SqlDatabase } from '@/services/db/sqlite';
 import { pendingCount, pendingRecordIds } from '@/services/sync/outbox';
 
 import {

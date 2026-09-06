@@ -7,7 +7,6 @@ import { failingOn } from '@/services/db/failing.testing';
 import type { SymptomDraft } from '@/domain/logs/symptom';
 import { migrate } from '@/services/db/migrator';
 import { createTestDatabase, type TestDatabase } from '@/services/db/nodeSqlite.testing';
-import type { SqlBindValue, SqlDatabase } from '@/services/db/sqlite';
 import { markSynced, pendingCount, pendingRecordIds } from '@/services/sync/outbox';
 
 import {
