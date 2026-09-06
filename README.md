@@ -25,7 +25,8 @@ npx expo start --dev-client
 ```
 
 Read [CLAUDE.md](CLAUDE.md) first if you are an agent. Then
-[docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) §12 for exactly where the work stopped.
+[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) for exactly where the work stopped and what is
+blocked on whom.
 
 ---
 
@@ -141,7 +142,7 @@ build showing `unknown` was made outside both.
 is the only file to update when state moves; this section is a summary and will otherwise drift,
 which is how this README came to claim 357 tests while `main` had 1131.
 
-As of 2026-09-06: **1136 tests across 67 suites**, `expo-doctor` 21/21, iOS bundle builds, and the
+As of 2026-09-06: **1201 tests across 72 suites**, `expo-doctor` 21/21, iOS bundle builds, and the
 RLS isolation suite passing 67 assertions against the live database.
 
 Built: onboarding, auth, all five log types offline with a durable outbox and bidirectional sync,
@@ -179,6 +180,7 @@ after a store release.
 | ------------------------------------------------------------ | ----------------------------------------------------------------- |
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)             | **Project state, blockers and the hardening plan. Start here**    |
 | [CLAUDE.md](CLAUDE.md)                                       | Engineering rules. Read before changing anything                  |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                 | The shape of the system, in diagrams                              |
 | [docs/MASTER_BUILD_SPEC.md](docs/MASTER_BUILD_SPEC.md)       | The product specification — source of truth for behaviour         |
 | [docs/DECISIONS.md](docs/DECISIONS.md)                       | 43 ADRs — read before reversing a decision                        |
 | [docs/PATTERN_ENGINE.md](docs/PATTERN_ENGINE.md)             | Every threshold, why it was chosen, and the honest limitations    |

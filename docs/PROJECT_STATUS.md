@@ -15,7 +15,7 @@ Everything below was run on 2026-09-06, not inferred.
 | Check                              | Result                                          |
 | ---------------------------------- | ----------------------------------------------- |
 | `npm run verify:full`              | green end to end — the same commands CI runs    |
-| `npm test`                         | **1136 tests, 67 suites** — pass                |
+| `npm test`                         | **1201 tests, 72 suites** — pass                |
 | `npx expo-doctor`                  | **21/21**                                       |
 | `npm run export:ios`               | bundles, **including Hermes bytecode** (5.8 MB) |
 | RLS isolation suite (live project) | **67 assertions** pass, no leftover rows        |
@@ -204,8 +204,17 @@ the gate works on a fork's pull request exactly as on a branch.
 - [x] `HANDOFF.md` reduced to a pointer. It was written to be read first by agents and had gone on
       describing a paused database, an unapplied migration and an unwritten deletion flow, all of
       which were done. The full text stays in git history
-- [ ] Architecture and data-flow diagrams
-- [ ] Threat model refreshed for account deletion and the Edge Function boundary
+- [x] **Diagrams — DONE.** `docs/ARCHITECTURE.md`, which `CLAUDE.md` §47 expected and nobody had
+      written. Five Mermaid diagrams: the layer dependencies, the offline write path, the pull and
+      its keyset cursor, the diary-to-finding pipeline, and where the secrets are and are not.
+      Deliberately thin — the reasoning stays in the documents that own it, because duplicating it
+      is how five files come to disagree
+- [x] **Threat model refreshed — DONE.** `PROJECT_PLAN.md` §5.3 gained T13 (the delete endpoint
+      aimed at someone else — mitigated by there being no user id parameter at all), T14 (the
+      service-role key escaping through a log) and T15 (a pull cursor skipping rows permanently).
+      Three existing rows had "verified by" claims that were no longer true: T1 cited a pgTAP suite
+      that does not exist, and T9 and T10 claimed tests that are written but unrun. All corrected —
+      a threat table that overstates its verification is worse than one with gaps in it
 
 ---
 
