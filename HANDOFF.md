@@ -535,28 +535,25 @@ Things only he can do. **Add to this list; do not act on it.**
 
 ### Anything a loop got stuck on
 
-#### 🔴 The Supabase project is PAUSED — blocks all database work
+#### ✅ RESOLVED (2026-09-06) — the project is restored and the database work is done
 
-`get_project` reports `"status": "INACTIVE"` for `mrqxmkxhyohlywiziofz`, and every query and
-migration times out with "Connection terminated due to connection timeout". Free-tier projects
-pause after a period of inactivity.
+The owner restored the Supabase project. Everything this block used to list as blocked has since
+been finished and verified against the live database:
 
-**What you need to do:** restore it from the Supabase dashboard (Project → Settings, or the
-"Restore project" prompt on the project home). It takes a few minutes.
+- `20260906090000_pattern_findings.sql` is **applied**. RLS is on with all four policies.
+- The RLS isolation suite has been **run for the first time**: 67 assertions pass, covering every
+  user-owned table plus `pattern_findings` and the anonymous-client checks. Fixtures roll back and
+  the project was confirmed to hold no leftover rows. Supabase's security advisor reports no lints.
+- Running it found two defects that reading had not: the block opened with a single dollar sign
+  instead of a doubled one, so the suite had never been valid SQL and **no** part of it had ever
+  executed; and appending to `anon_tables` needed a `::text` cast. Both are in ADR-0041.
+- **Account deletion is built** (spec §97 — the last §58 blocker that was open). A
+  `delete-account` Edge Function deletes the caller and takes no user id at all, and the client
+  runs server → device → session. Verified against the live project, including that a request
+  body naming another account does not touch it. See ADR-0042.
 
-**Why a loop did not do it itself:** restoring a paused project is an infrastructure action with
-billing implications, not a migration. The overnight permissions cover applying migrations, and
-§2 says anything not clearly permitted is not permitted.
-
-**State to be aware of before retrying:**
-
-- `supabase/migrations/20260906090000_pattern_findings.sql` is **written and committed but NOT
-  applied.** The failure happened at "Failed to initialise history table", before any schema
-  change ran, so the table almost certainly does not exist — but **verify before re-applying**:
-  `select to_regclass('public.pattern_findings');`
-- `supabase/tests/rls_isolation.sql` does **not** yet cover `pattern_findings`. It must before
-  that table is considered done (`CLAUDE.md` §14).
-- Nothing else is blocked. Loops after this one worked on local-only code.
+Still blocked on the owner: the Sentry SDK needs a DSN (the scrubber is done and tested), M7/M10
+need an AI provider, M12 needs RevenueCat, and M13 needs HealthKit on a device.
 
 #### 🟡 Two small things worth knowing, neither blocking
 

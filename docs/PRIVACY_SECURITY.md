@@ -140,14 +140,22 @@ blocker under §58 rather than a documented acceptance.
 
 Listed so nobody has to discover it.
 
-- **The RLS audit has not been run.** The policies exist in `supabase/migrations/` and
-  `supabase/tests/rls_isolation.sql` covers the shipped tables, but the live project has been
-  paused throughout Milestone 16, so nothing has been verified against it.
-  `pattern_findings` is written, unapplied, and **not yet covered** by the isolation tests.
-- **Account deletion does not exist** (spec §97, a §58 blocker). The local half is ready —
-  `wipeLocalDataExcept(db, null)` and `deleteLocalDatabase()` — but deleting the auth user needs a
-  service-role Edge Function, and no `supabase/functions/` directory exists yet. No UI has been
-  built, because a delete button whose server half does nothing is the fake control §57 forbids.
-- **Data export does not exist** (spec §98, Milestone 15).
-- **Nothing has run on a physical device.** Every protection here is verified by tests and by
-  reading; none has been observed working on a phone.
+- **Data export cannot leave the device** (spec §98). `buildDiaryExport()` produces the JSON and
+  CSV files and is tested, but writing and sharing them needs `expo-file-system` and
+  `expo-sharing`, which are approved and not yet installed. No control is shown until they are.
+- **Nothing has run on a physical device.** Every protection here is verified by tests, against
+  the live database, or by reading; none has been observed working on a phone.
+
+### Closed on 2026-09-06
+
+- **The RLS audit has been run** against the live project, and `pattern_findings` is applied and
+  covered: 67 assertions pass across every user-owned table plus the anonymous-client checks, with
+  no rows left behind and no security lints from Supabase's advisor. Running it mattered more than
+  writing it had: the suite contained a dollar-quoting error that made it invalid SQL, so **no**
+  part of it had ever executed, plus a runtime type error in the `pattern_findings` path. Both are
+  in ADR-0041.
+- **Account deletion exists** (spec §97), end to end. See ADR-0042 for the design; the property
+  worth repeating here is that the Edge Function takes **no user id** — it reads the caller's id
+  from the verified token, so it cannot be aimed at anyone else. Verified against the live project:
+  a caller who named a second account in the request body deleted only their own, and the named
+  account was untouched.

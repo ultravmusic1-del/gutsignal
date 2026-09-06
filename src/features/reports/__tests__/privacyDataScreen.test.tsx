@@ -26,6 +26,27 @@ jest.mock('@/features/reports/useCreateReport', () => ({
   }),
 }));
 
+/**
+ * Deletion is mocked here for the same reason the report is: this file is about the screen, and
+ * the flow it drives is tested where it lives, in `features/account/__tests__/deleteAccount.test`.
+ * What matters here is that the control cannot be reached without typing the word.
+ */
+const mockDelete = jest.fn();
+const mockDeleteState: { isPending: boolean; isError: boolean; data: unknown } = {
+  isPending: false,
+  isError: false,
+  data: undefined,
+};
+
+jest.mock('@/features/account/useDeleteAccount', () => ({
+  useDeleteAccount: () => ({
+    mutate: mockDelete,
+    isPending: mockDeleteState.isPending,
+    isError: mockDeleteState.isError,
+    data: mockDeleteState.data,
+  }),
+}));
+
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 59, left: 0, right: 0, bottom: 34 },
@@ -35,6 +56,10 @@ beforeEach(() => {
   mockMutate.mockClear();
   mockState.isPending = false;
   mockState.isError = false;
+  mockDelete.mockClear();
+  mockDeleteState.isPending = false;
+  mockDeleteState.isError = false;
+  mockDeleteState.data = undefined;
 });
 
 const renderScreen = async () =>
@@ -102,13 +127,12 @@ describe('when something goes wrong', () => {
 });
 
 describe('what is deliberately absent', () => {
-  // §57: a row that leads nowhere is worse than no row. File export needs two dependencies that
-  // are not installed, and deletion needs a server function that cannot be written yet.
-  it('offers no export or delete control', async () => {
+  // §57: a row that leads nowhere is worse than no row. File export still needs two dependencies
+  // that are not installed. Deletion is no longer in this category — it works.
+  it('offers no export control', async () => {
     const view = await renderScreen();
 
     expect(view.queryByRole('button', { name: /export/i })).toBeNull();
-    expect(view.queryByRole('button', { name: /delete/i })).toBeNull();
   });
 
   it('says in words what is not built yet, rather than leaving a silence', async () => {
@@ -116,6 +140,63 @@ describe('what is deliberately absent', () => {
 
     expect(view.getByText(/NOT HERE YET/)).toBeTruthy();
     expect(view.getByText(/being built/i)).toBeTruthy();
+  });
+});
+
+/**
+ * Deleting an account (spec §97).
+ *
+ * The screen's job is to make the action deliberate and to say what it costs before it is taken.
+ * Both are testable without a server, and both are the parts a person only meets once.
+ */
+describe('deleting an account', () => {
+  const typeConfirmation = async (view: Awaited<ReturnType<typeof renderScreen>>, text: string) => {
+    await act(async () => {
+      fireEvent.changeText(view.getByLabelText(/Type DELETE to confirm/i), text);
+    });
+  };
+
+  it('will not delete until the word is typed', async () => {
+    const view = await renderScreen();
+
+    await press(view, 'Delete account');
+    expect(mockDelete).not.toHaveBeenCalled();
+
+    // A near miss is still a miss.
+    await typeConfirmation(view, 'delete my account');
+    await press(view, 'Delete account');
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it('deletes once the word is typed', async () => {
+    const view = await renderScreen();
+
+    await typeConfirmation(view, 'DELETE');
+    await press(view, 'Delete account');
+
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+  });
+
+  // §97 requires this said separately, and it is the one thing that cannot be said afterwards:
+  // the account is gone, so there is no screen left to read it from.
+  it('warns that deleting does not cancel an Apple subscription, before the control', async () => {
+    const view = await renderScreen();
+
+    expect(view.getByText(/does not automatically cancel an Apple subscription/i)).toBeTruthy();
+  });
+
+  it('says the deletion cannot be undone', async () => {
+    const view = await renderScreen();
+
+    expect(view.getByText(/cannot be undone/i)).toBeTruthy();
+  });
+
+  it('reports a failed deletion without claiming anything was removed', async () => {
+    mockDeleteState.data = { ok: false, failedAt: 'server', message: 'Nothing has been removed.' };
+
+    const view = await renderScreen();
+
+    expect(view.getByText(/Nothing has been removed/i)).toBeTruthy();
   });
 });
 

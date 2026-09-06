@@ -1080,3 +1080,59 @@ Windows dev machine (§6). `supabase db query --file --linked` would run the com
 directly and is the better route once an access token is configured; that is worth doing, because
 running a hand-copied version of a security test is a practice that eventually verifies the wrong
 thing.
+
+---
+
+## ADR-0042 — Account deletion runs through an Edge Function that takes no user id
+
+**Status:** Accepted · **Date:** 2026-09-06
+
+**Context.** Spec §97 requires in-app account deletion, and `CLAUDE.md` §58 makes its absence a
+release blocker. Deleting an `auth.users` row needs the service-role key, which §14 and §58 both
+forbid shipping to a device. So the deletion has to happen somewhere the key can live.
+
+**Alternatives considered.** (a) A Postgres function called over RPC. (b) An Edge Function that
+accepts the user id to delete. (c) An Edge Function that accepts nothing and deletes the caller.
+
+**Reason.** (c).
+
+(a) cannot work: RLS governs table access, but removing the `auth.users` row is an auth-server
+operation, not a table one, and a `security definer` function that could do it would be a
+privilege-escalation surface reachable by every authenticated client.
+
+(b) is the ordinary shape and the dangerous one. An endpoint that takes an id is one authorisation
+bug away from "delete any account by uuid", which in an app holding health diaries is the worst
+defect available. There is therefore **no id parameter at all** — not optional, not admin-only —
+because a parameter that must never be used is one that eventually gets used. The id comes from
+`getUser(token)`, which validates against the auth server rather than decoding locally, and the
+platform's `verify_jwt` stands in front of that as a second, independent check.
+
+**Consequences.** One delete removes everything. Every user-owned table references
+`auth.users (id) on delete cascade` and the meal children cascade from `meal_logs`, verified
+against the live schema, so there is deliberately no per-table delete list in the function — a
+list would need updating for every new table and would fail silently when someone forgot.
+
+Verified against the live project, not by reading: a caller whose request body named a second
+account deleted only their own, and the named account and its rows were untouched. Missing token,
+expired token and `GET` are refused with 401/401/405, and the caller's token is refused once the
+account is gone.
+
+**The client ordering is server → device → session**, and that is the part with a wrong answer.
+The server holds the only copy that outlives the device, so it goes first; if that call fails,
+nothing local is touched and the person still has an account to retry from. Wiping the device
+first would produce the one arrangement with no way back — local data gone, server data intact,
+and no session left to reach it with. Past the server call the steps stop gating each other:
+leaving someone signed in to an account that no longer exists strands the app with no route out,
+so the session ends even when clearing the device failed, and the app says a local copy may remain
+rather than claiming a clean sweep it did not achieve. `runAccountDeletion` is pure and its ports
+are injected, so every one of those failure paths is tested without a network or a database.
+
+**Reauthentication is a typed word.** §97 asks for it "if needed", and neither sign-in method can
+provide it: Sign in with Apple has no password to re-enter, and an emailed code would make an
+irreversible action depend on an inbox arriving — failing exactly when someone is travelling, and
+proving nothing about intent. Typing `DELETE` cannot happen by mis-tap, which is what
+reauthentication is protecting against here.
+
+**Storage is not touched, because no bucket exists.** When meal photos arrive (M7), objects under
+`meal-photos/{userId}/` must be removed in this function before the auth user goes. That is
+recorded in the function's own docstring, next to the code that will need changing.

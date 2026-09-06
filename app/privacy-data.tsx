@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 
-import { Button, Card, Chip, Screen, Text } from '@/components/ui';
+import { Button, Card, Chip, Screen, Text, TextField } from '@/components/ui';
+import { accountDeletionExplainer, isDeletionConfirmed } from '@/features/account/deleteAccount';
+import { useDeleteAccount } from '@/features/account/useDeleteAccount';
 import {
   REPORT_PERIOD_DAYS,
   useCreateReport,
@@ -12,20 +14,53 @@ import { useTheme } from '@/theme';
 /**
  * Privacy & Data (spec §97).
  *
- * The home for everything a person does with their own record rather than to it: reports today,
- * file export and account deletion when they exist. Reached from You.
+ * The home for everything a person does with their own record rather than to it. Reports and
+ * account deletion are here; file export is not, because it needs `expo-file-system` and
+ * `expo-sharing` and a control that leads nowhere is the dead button `CLAUDE.md` §57 forbids.
+ * What the app cannot do yet is said in words instead of shown as a button.
  *
- * Only the report is here. File export needs `expo-file-system` and `expo-sharing`, and account
- * deletion needs a server function that cannot be written while the database is paused — and a row
- * that leads nowhere is the dead control `CLAUDE.md` §57 forbids, so neither is listed until it
- * works. What the app cannot do yet is said in words instead.
+ * **Deletion is real, and it is last on the screen for a reason.** It is irreversible and it is
+ * the only control here that destroys anything, so it sits below everything a person might have
+ * come for, behind a typed confirmation, with what it removes stated before the control appears.
  */
 export default function PrivacyAndDataScreen() {
   const theme = useTheme();
   const [days, setDays] = useState<ReportPeriodDays>(30);
   const createReport = useCreateReport();
 
+  const [typed, setTyped] = useState('');
+  const deleteAccount = useDeleteAccount();
+  const explainer = accountDeletionExplainer();
+  const confirmed = isDeletionConfirmed(typed);
+
   const failed = createReport.isError;
+
+  /**
+   * On success the session ends and the app routes back to welcome, so there is no screen left to
+   * report on. The one thing worth interrupting for is a server deletion that succeeded while the
+   * device could not be cleared: the account is gone either way, but claiming a clean sweep that
+   * did not happen would be a false statement about someone's health data.
+   */
+  const confirmDelete = () => {
+    deleteAccount.mutate(undefined, {
+      onSuccess: (result) => {
+        if (result.ok && !result.localDataCleared) {
+          Alert.alert(
+            'Account deleted',
+            'Your account and everything on our servers are gone. A copy on this device could ' +
+              'not be removed — reinstalling GutSignal will clear it.'
+          );
+        }
+      },
+    });
+  };
+
+  const deleteError =
+    deleteAccount.data !== undefined && !deleteAccount.data.ok
+      ? deleteAccount.data.message
+      : deleteAccount.isError
+        ? 'Your account could not be deleted just now. Nothing has been removed.'
+        : null;
 
   return (
     <Screen scroll topInset={false}>
@@ -94,10 +129,57 @@ export default function PrivacyAndDataScreen() {
               NOT HERE YET
             </Text>
             <Text variant="body" color="secondary">
-              Downloading your full diary as a file, and deleting your account from inside the app,
-              are both being built. Until they are, they are not listed here rather than shown as
-              buttons that would not work.
+              Downloading your full diary as a file is being built. Until it is, it is not listed
+              here rather than shown as a button that would not work.
             </Text>
+          </View>
+        </Card>
+
+        {/* Deletion, last on the screen and behind a typed word. Everything it removes is stated
+            before the control that removes it — including the Apple subscription note §97 asks to
+            be made separately, which is the one thing nobody can be told afterwards. */}
+        <Card>
+          <View style={{ gap: theme.spacing.md }}>
+            <View style={{ gap: theme.spacing.xxs }}>
+              <Text variant="cardTitle">{explainer.title}</Text>
+              <Text variant="body" color="secondary">
+                {explainer.body}
+              </Text>
+            </View>
+
+            <View style={{ gap: theme.spacing.xs }}>
+              {explainer.points.map((point) => (
+                <Text key={point} variant="caption" color="secondary">
+                  {point}
+                </Text>
+              ))}
+            </View>
+
+            <TextField
+              label={explainer.confirmLabel}
+              value={typed}
+              onChangeText={setTyped}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityHint="Deleting is permanent and cannot be undone"
+            />
+
+            {/* Disabled until the word is typed. This is the one place in the app where a disabled
+                control is right rather than a placeholder: it is not waiting on a feature that does
+                not exist, it is waiting on the person to mean it. */}
+            <Button
+              label="Delete account"
+              variant="secondary"
+              disabled={!confirmed || deleteAccount.isPending}
+              loading={deleteAccount.isPending}
+              onPress={confirmDelete}
+            />
+
+            {deleteError !== null ? (
+              <Text variant="caption" color="danger">
+                {deleteError}
+              </Text>
+            ) : null}
           </View>
         </Card>
       </View>
