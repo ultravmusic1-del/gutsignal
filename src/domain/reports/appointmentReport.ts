@@ -34,6 +34,7 @@ import {
 import type { Finding } from '@/domain/pattern-engine/types';
 import { formatLocalDate } from '@/domain/patterns/findingDetail';
 import { whatStandsOut, worthInvestigating } from '@/domain/patterns/insights';
+import { buildTrends, type TrendSeries } from '@/domain/patterns/trends';
 
 /** Periods spec §70 asks for. A custom range is any other `DateRange`. */
 export const REPORT_PERIODS = [30, 90] as const;
@@ -105,6 +106,14 @@ export type AppointmentReport = {
   symptoms: SymptomSection;
   bowel: BowelSection;
   associations: AssociationsSection;
+  /**
+   * Weekly series over the period — spec §70 asks for trends by name.
+   *
+   * Only those with enough weeks to be a line, using the same `hasTrend` gate the Insights screen
+   * uses. Two points make a line that reads as a direction while carrying none, and a clinician
+   * reading a printed page cannot ask it questions.
+   */
+  trends: TrendSeries[];
   disclaimer: string;
   /** Sections the app cannot fill yet, named rather than silently missing. */
   notIncluded: string[];
@@ -228,6 +237,8 @@ export function buildAppointmentReport({
       emerging: worthInvestigating(findings),
       comparisonsMade: compared.length,
     },
+
+    trends: buildTrends({ logs, range }).filter((series) => series.hasTrend),
 
     disclaimer: REPORT_DISCLAIMER,
 

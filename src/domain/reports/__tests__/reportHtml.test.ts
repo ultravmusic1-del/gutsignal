@@ -271,3 +271,44 @@ describe('what the page must never say', () => {
     expect(output).not.toMatch(/<h2>\s*(Summary|Conclusion|Assessment)/i);
   });
 });
+
+describe('the week-by-week table', () => {
+  // Spec §70 asks for trends. A sparkline reads better on a screen and survives a photocopier
+  // badly; a clinician can read numbers and point at one while asking about it.
+  const fourWeeks = {
+    ...emptyLogs,
+    symptoms: [1, 5, 12, 26].map((n) => makeSymptom(day(n), { id: `s-${n}` })),
+    wellbeing: [2, 6, 13, 27].map((n) => makeWellbeing(day(n), { id: `w-${n}` })),
+  };
+
+  it('appears once there is more than a pair of points', () => {
+    const output = html(fourWeeks);
+
+    expect(output).toContain('<h2>Week by week</h2>');
+    expect(output).toContain('<th scope="col">Week ending</th>');
+  });
+
+  it('names each series in a column header', () => {
+    expect(html(fourWeeks)).toContain('Days with symptoms');
+  });
+
+  // The §59 rule, all the way into a table cell: a column of zeroes reads as a good month.
+  it('shows a dash for a week with nothing recorded, never a zero', () => {
+    const output = html(fourWeeks);
+
+    expect(output).toContain('—');
+    expect(output).toMatch(/A dash means nothing was recorded that week/);
+    expect(output).toMatch(/not the same as a week without\s+symptoms/);
+  });
+
+  it('explains what each column measures', () => {
+    expect(html(fourWeeks)).toContain('Out of the days you reported on that week.');
+  });
+
+  // A section with one row of dashes is noise on a page meant to be concise.
+  it('is absent entirely when there is nothing to plot', () => {
+    expect(html({ ...emptyLogs, symptoms: [makeSymptom(day(1))] })).not.toContain(
+      '<h2>Week by week</h2>'
+    );
+  });
+});

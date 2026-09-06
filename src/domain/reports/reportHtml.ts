@@ -17,6 +17,7 @@
  */
 
 import type { Finding } from '@/domain/pattern-engine/types';
+import type { TrendSeries } from '@/domain/patterns/trends';
 import {
   confidenceWord,
   exposurePhrases,
@@ -233,6 +234,74 @@ function findingHtml(finding: Finding): string {
     </div>`;
 }
 
+/**
+ * Trends, as a table rather than a chart (spec §70).
+ *
+ * A sparkline would look better on a screen and is the obvious thing to reach for. On paper it is
+ * the wrong choice: a printed report is photocopied, faxed and read at arm's length, and a
+ * two-centimetre line of dots survives none of that. A clinician can read numbers, cannot
+ * misinterpret them, and can point at one while asking about it.
+ *
+ * **A week with nothing recorded shows a dash, never a zero.** Everywhere else in this codebase
+ * that distinction is enforced in the data (§59); here it has to survive into a cell, because a
+ * column of zeroes reads as a good month.
+ */
+function trendsSection(report: AppointmentReport): string {
+  // The section is about how symptoms moved, with logging shown alongside as context. When
+  // *only* the logging series has a trend there is nothing about health to see, and the tracking
+  // table above has already said how much was logged — so a page of zeroes would be length
+  // without information, which §71 asks concise reports not to be. The model keeps the honest
+  // data either way; this is a decision about what earns a page.
+  const aboutHealth = report.trends.filter((series) => series.key !== 'logging_days');
+  if (aboutHealth.length === 0) return '';
+
+  // Every series shares the same weekly buckets, so one column per series and one row per week
+  // reads as a calendar rather than as several unrelated charts.
+  const weeks = report.trends[0]?.points ?? [];
+
+  const cell = (series: TrendSeries, index: number): string => {
+    const point = series.points[index];
+    if (point === undefined || point.value === null) return '—';
+
+    return series.unit === 'severity'
+      ? point.value.toFixed(1)
+      : `${Math.round(point.value * 100)}%`;
+  };
+
+  return `
+    <section>
+      <h2>Week by week</h2>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Week ending</th>
+            ${report.trends
+              .map((series) => `<th scope="col" class="n">${escapeHtml(series.label)}</th>`)
+              .join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${weeks
+            .map(
+              (week, index) => `<tr>
+                <th scope="row">${escapeHtml(formatLocalDate(week.end))}</th>
+                ${report.trends
+                  .map((series) => `<td class="n">${escapeHtml(cell(series, index))}</td>`)
+                  .join('')}
+              </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>
+      <p class="note">
+        A dash means nothing was recorded that week, which is not the same as a week without
+        symptoms. ${escapeHtml(
+          report.trends.map((series) => `${series.label}: ${series.description}`).join(' ')
+        )}
+      </p>
+    </section>`;
+}
+
 function associationsSection(report: AppointmentReport): string {
   const { associations } = report;
   const { standsOut, emerging } = associations;
@@ -283,6 +352,7 @@ export function renderReportHtml(report: AppointmentReport): string {
   ${trackingSection(report)}
   ${symptomSection(report)}
   ${bowelSection(report)}
+  ${trendsSection(report)}
   ${associationsSection(report)}
 
   <section>

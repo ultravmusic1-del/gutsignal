@@ -245,3 +245,47 @@ describe('determinism', () => {
     expect(report(logs)).toEqual(report(logs));
   });
 });
+
+describe('trends', () => {
+  // Spec §70 asks for trends by name, and it was the one required section the report lacked.
+  const fourWeeks = (): LogSet =>
+    logsWith({
+      symptoms: [1, 8, 15, 22].map((n) => makeSymptom(day(n), { id: `s-${n}`, severity: 5 })),
+      wellbeing: [2, 9, 16, 23].map((n) => makeWellbeing(day(n), { id: `w-${n}` })),
+    });
+
+  it('includes weekly series once there are enough weeks to be a line', () => {
+    const trends = report(fourWeeks()).trends;
+
+    expect(trends.length).toBeGreaterThan(0);
+    expect(trends.every((series) => series.hasTrend)).toBe(true);
+  });
+
+  // Two points make a line that reads as a direction while carrying none, and a printed page
+  // cannot be asked questions.
+  it('omits a series with too few weeks to say anything', () => {
+    const logs = logsWith({ symptoms: [makeSymptom(day(1))] });
+
+    expect(report(logs).trends.every((series) => series.hasTrend)).toBe(true);
+  });
+
+  // "Days you logged" is 0% for an unlogged week rather than absent, so it legitimately has a
+  // trend even for an empty diary — and for an empty diary it is the only true thing to plot.
+  it('plots only the logging series for an empty diary', () => {
+    expect(report(emptyLogs).trends.map((series) => series.key)).toEqual(['logging_days']);
+  });
+
+  // The §59 distinction has to survive into the report, not just the engine. Buckets run back
+  // from the end of the range, so days 17–23 are the untouched week here.
+  it('leaves an unlogged week without a value rather than at zero', () => {
+    const logs = logsWith({
+      symptoms: [1, 5, 12, 26].map((n) => makeSymptom(day(n), { id: `s-${n}` })),
+      wellbeing: [2, 6, 13, 27].map((n) => makeWellbeing(day(n), { id: `w-${n}` })),
+    });
+
+    const series = report(logs).trends.find((entry) => entry.key === 'symptom_days');
+
+    expect(series).toBeDefined();
+    expect(series?.points.filter((point) => point.value === null)).toHaveLength(1);
+  });
+});
