@@ -74,6 +74,20 @@ export function captureError(operation: MonitoredOperation, error: unknown): Cap
     ...(currentUserId === null ? {} : { user: { id: currentUserId } }),
   });
 
+  // In development, a captured error with nowhere to go goes to the console instead.
+  //
+  // Without this, a caught failure on a real device is silent to everybody: the sink is null until
+  // a DSN exists, so `captureError` scrubbed a perfectly good description and dropped it. That was
+  // found the first time the app ran on a phone — the boot screen said the database would not open
+  // and there was no way to learn why without editing the app.
+  //
+  // The **scrubbed** event is logged, never the raw error. That is the whole point of the
+  // scrubber: what survives it is what would have been safe to send to a vendor, so it is safe in
+  // a console too (§30). And it is `__DEV__` only, so it cannot reach a release build.
+  if (__DEV__) {
+    console.warn(`[monitoring] ${operation}:`, JSON.stringify(event));
+  }
+
   if (sink === null) return 'no_sink';
 
   try {
