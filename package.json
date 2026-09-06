@@ -15,7 +15,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "doctor": "npx expo-doctor",
-    "verify": "npm run typecheck && npm run lint && npm test"
+    "verify": "npm run typecheck && npm run lint && npm test",
+    "report:sample": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/sample-report.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
