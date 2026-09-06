@@ -1,0 +1,138 @@
+name: CI
+
+# Every change reaches `main` through this. The application engineering was well ahead of the
+# repository engineering — sophisticated protections inside the codebase, and almost none around
+# it — and this file is the outer half.
+#
+# Two properties worth preserving:
+#
+#   * **The verify job needs no secrets.** Nothing here reads a real key, so the gate runs on a
+#     fork's pull request exactly as it does on a branch. A gate that only works for the owner is
+#     a gate that stops working the moment somebody else opens a PR.
+#   * **Steps mirror `npm run verify:full` one for one**, in the same order, so a green CI run and
+#     a green local run mean the same thing. They are listed separately rather than as a single
+#     script call only so a failure names itself in the UI instead of hiding inside a chain.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A superseded run tells you nothing. Cancel it and keep the queue honest.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Placeholders, not secrets. Every EXPO_PUBLIC_ value is embedded in the binary and public by
+      # definition, and the suite was confirmed to pass with none of them set at all — these exist
+      # so the bundle is built the way a real build is, with the substitution actually happening,
+      # rather than proving only that Metro tolerates `undefined`.
+      EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-not-a-real-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # `ci`, never `install`: the lockfile is the input, and a job that quietly resolves a
+      # different tree is testing something other than what will ship.
+      - name: Install
+        run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # --runInBand: the offline-layer tests drive a real SQLite database, and serial execution
+      # keeps a failure reproducible rather than dependent on worker scheduling.
+      - name: Tests
+        run: npm run test:ci
+
+      - name: Expo Doctor
+        run: npx expo-doctor
+
+      # The weakest of the gates, and worth being honest about: this proves Metro can build the
+      # bundle. It proves nothing about entitlements, native modules, signing or anything else that
+      # only exists on a device. See docs/PROJECT_STATUS.md §1.
+      - name: iOS bundle
+        run: npm run export:ios
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # High and critical fail the build; moderate does not. That is a policy, not laziness:
+      # ADR-0039 records two moderate advisories accepted with a documented absence of data
+      # exposure, and a gate that fails on findings nobody may act on is a gate people learn to
+      # ignore. `npm audit fix` is deliberately never run here — it would happily move a package
+      # Expo pins and break the SDK 57 alignment ADR-0038 exists to hold.
+      - name: Audit
+        run: npm audit --audit-level=high
+
+  migrations:
+    name: Migrations from zero + RLS
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # This is the job that would have caught ADR-0041 on the day it was written. The RLS suite sat
+    # in the tree for weeks looking like verification while containing a dollar-quoting error that
+    # made it invalid SQL — so no part of it had ever executed. Nothing but running it finds that.
+    #
+    # It also answers the question a hosted database cannot: does the schema rebuild from nothing?
+    # A production database that only works because of its own history is not a schema, it is an
+    # artefact.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: supabase start
+
+      # Applies every migration in order against an empty database. `auth.users`, the roles and
+      # the extensions come from the local stack, which is why this runs against Supabase rather
+      # than a bare Postgres container.
+      - name: Apply every migration from zero
+        run: supabase db reset
+
+      # Passes silently and raises a named exception on the first failed assertion.
+      - name: RLS isolation suite
+        run: supabase db query --local --file supabase/tests/rls_isolation.sql
+
+      - name: Stop
+        if: always()
+        run: supabase stop

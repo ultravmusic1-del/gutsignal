@@ -1,0 +1,38 @@
+# Dependency updates, deliberately narrow.
+#
+# The blunt configuration would open a PR for every package weekly. That is actively harmful
+# here: Expo pins its own ecosystem, and ADR-0038 records a day spent recovering from a patch
+# bump that moved react-native out of alignment with the SDK. `npx expo install --check` is the
+# tool that owns those packages, not Dependabot.
+#
+# So the Expo and React Native surface is ignored outright, and what remains is the ordinary
+# dependency surface where an automated PR is genuinely useful.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    # Security fixes still arrive for ignored packages; only version bumps are suppressed.
+    ignore:
+      - dependency-name: 'expo'
+      - dependency-name: 'expo-*'
+      - dependency-name: '@expo/*'
+      - dependency-name: 'react-native'
+      - dependency-name: 'react-native-*'
+      - dependency-name: '@react-native/*'
+      - dependency-name: 'react'
+      - dependency-name: 'react-dom'
+      - dependency-name: 'jest-expo'
+      - dependency-name: 'eslint-config-expo'
+      # Reanimated and worklets are pinned exactly by the SDK and break loudly out of step.
+      - dependency-name: 'react-native-worklets'
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    labels: [dependencies]
