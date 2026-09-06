@@ -4,7 +4,7 @@
 He is unavailable until morning. This file is the handoff between loop iterations — read it
 first, act, then update it last.
 
-Last updated: **2026-09-06, loop 28** · Update the date and loop number every
+Last updated: **2026-09-06, loop 29** · Update the date and loop number every
 time you touch this file.
 
 ---
@@ -41,9 +41,9 @@ owner and work on something else.
 
 |                   |                                                                  |
 | ----------------- | ---------------------------------------------------------------- |
-| Current branch    | `feat/m6-timeline` — 67 commits ahead of `main`, pushed          |
+| Current branch    | `feat/m6-timeline` — 69 commits ahead of `main`, pushed          |
 | `main`            | `22d2aa2` — Milestone 5 complete. **Untouched by design.**       |
-| Tests             | **1072 passing**, 64 suites                                      |
+| Tests             | **1081 passing**, 65 suites                                      |
 | `npx expo-doctor` | **21/21**                                                        |
 | iOS bundle        | builds (`npx expo export --platform ios`)                        |
 | Live database     | ⚠️ **PAUSED (INACTIVE)** — see §7. 11 tables when last reachable |
@@ -200,7 +200,7 @@ something the owner must provide first, so the next unblocked milestone is **M16
 M16's analytics, monitoring, secret-scan and dependency-audit work is done; what remains of it
 needs the paused database or a DSN (listed at the end of this section). M15 is fully unblocked.
 
-**Done in loops 26–28:**
+**Done in loops 26–29:**
 
 - `domain/export/csv.ts` + 18 tests — a CSV writer that handles **two** problems. Escaping is the
   familiar one. **Formula injection** is the one that matters: a cell starting with `=`, `+`, `-`,
@@ -243,22 +243,34 @@ needs the paused database or a DSN (listed at the end of this section). M15 is f
   provide invisibly (the `@/` alias, and the extensions TypeScript omits); Node 24 strips the types
   itself. Output goes to the OS temp directory, never the repo.
 
+- `app/privacy-data.tsx` + `features/reports/useCreateReport.ts` + 8 tests — **the report is
+  reachable.** You → Privacy & data, which spec §97 already names as the home for reports, export
+  and deletion.
+  **Only `expo-print` was added**, which `docs/PROJECT_PLAN.md` had already approved for M15. That
+  settles the question loop 26 left open: `printAsync` renders the HTML into the native print
+  sheet, which on iOS offers Save to Files and AirDrop — so the report needs neither
+  `expo-file-system` nor `expo-sharing`.
+  **A closed print sheet is not a failure.** On iOS `printAsync` rejects when the window is
+  dismissed without printing, and that rejection cannot be told apart from a real failure while
+  being far more common. Anything failing _before_ the sheet opens is a real error; anything after
+  resolves as `'dismissed'` and says nothing.
+  30 and 90 days only — a custom range needs a date picker that does not exist. No export or delete
+  row, because §57 forbids a control that leads nowhere; the screen says in words what is missing.
+
 **Pick up here:**
 
-1. **`expo-print`, and a screen to reach any of this from.** The whole M15 pipeline is built and
-   pure — diary → JSON/CSV, diary → report → HTML — and **none of it is reachable by a user.** That
-   is now the gap, not the logic.
-   `expo-print` is already approved in `docs/PROJECT_PLAN.md`, so there is no dependency decision:
-   install with `npx expo install expo-print`, then re-run `npx expo-doctor` and a bundle.
-   `printToFileAsync` gives a PDF path; `printAsync` opens the native print/share sheet directly,
-   which may make the `expo-sharing` question in §7 moot — check that before adding it.
-   Put it behind **You → Privacy & Data**, which spec §97 already names as the home for export and
-   deletion. Real states are needed: serialising a large diary takes a moment, and a share sheet
-   the user dismisses is not an error.
-2. **Period selection** (spec §70 asks for 30-day, 90-day and custom). `buildAppointmentReport`
-   already takes any `DateRange`, so this is a control, not new logic.
-3. **Read the sample before changing the report.** `npm run report:sample` is faster than reasoning
-   about the markup, and it is how the toast finding below was noticed.
+1. **File export needs a decision you cannot make** — see §7. It wants `expo-file-system` (writes
+   the files) and `expo-sharing` (hands them to another app), neither installed and neither
+   pre-approved. The builders in `domain/export/` are done and tested, so this is one screen
+   section once the dependencies are settled. **Do not add them on your own initiative**: the
+   standing permission says prefer not to, and two at once for one feature is not "prefer not to".
+2. **A custom report period** (spec §70 asks for 30, 90 and custom). `buildAppointmentReport` takes
+   any `DateRange`, so the work is entirely a date-range control — and there is no date picker in
+   the codebase yet, which is a design decision before it is a coding one.
+3. **M11 — Experiments** is the next unblocked milestone if M15's remainder is stuck on the above.
+   It needs M8, which is complete, and it is what unlocks the second half of `nextStep()` on the
+   pattern detail page (currently "keep logging" only, with a test forbidding the word
+   "experiment" until then).
 
 ### Milestone 16 — privacy and security hardening. **The unblocked parts are complete.**
 
@@ -469,6 +481,7 @@ Append one line per loop. Keep it short and factual.
 | 26   | M15 started: diary export as lossless JSON and per-type CSV, safe against spreadsheet formulas.         | 1023 tests, verify green, bundle builds |
 | 27   | Appointment-report content model (§70): denominators, no conclusions, absences named not hidden.        | 1043 tests, verify green, bundle builds |
 | 28   | Report rendered for paper (§71) — escaped, low ink, no conclusions. Sample script added.                | 1072 tests, verify green, doctor 21/21  |
+| 29   | Report reachable: You → Privacy & data, expo-print only. A closed print sheet is not an error.          | 1081 tests, verify green, doctor 21/21  |
 
 ---
 
@@ -590,6 +603,24 @@ doubt a printed page. So the content model refuses more than it offers:
 What I could not judge is whether it reads well to a clinician, which is the only test that
 matters. If you know one, the content model is worth five minutes of their time before it becomes
 a PDF — it is much cheaper to change now than after the layout exists.
+
+#### 🟠 File export needs two dependencies. That is your call, not mine.
+
+The report is reachable now (You → Privacy & data) and needed only `expo-print`, which the
+project plan had already approved. **File export is different.** Writing the JSON and CSV files
+and handing them to another app needs:
+
+- **`expo-file-system`** — writes the files. First-party Expo, no real alternative.
+- **`expo-sharing`** — opens the iOS share sheet so they can be sent somewhere.
+
+Both pass every check in §38 on their merits. I did not add them because the standing permission
+says **prefer not to**, and adding two at once for one feature is not preferring not to. The
+builders in `domain/export/` are finished and tested, so this is one screen section and perhaps
+an hour once you say yes.
+
+The alternative, if you would rather not: write the files with `expo-file-system` alone and let
+people find them through the Files app. That is one dependency instead of two and materially
+worse to use — I would take the share sheet, but it is your tree.
 
 #### 🟡 Export exists but nobody can reach it yet
 
