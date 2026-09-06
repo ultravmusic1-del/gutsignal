@@ -139,8 +139,11 @@ the gate works on a fork's pull request exactly as on a branch.
   Unit-testing those means mocking the SDK and asserting against the mock, which is the kind of
   test that passes while the app is broken.
 
-- [ ] **Raise `services/auth` deliberately.** Its floor is honest but low. The right cover for it
-      is the device pass and the E2E flows, not more mocks — so it should rise as those land,
+> **Not a Bucket A task, deliberately.** `services/auth`'s floor is honest but low, and the right
+> cover for it is the device pass (§5 C2) and the E2E flows, not more mocks. It rises when those
+> run. Unit tests over the Supabase SDK would raise the number and prove nothing, which is the
+> kind of coverage this project has no use for.
+
 - [x] **Timezone matrix — DONE.** `pattern-engine/__tests__/timezones.test.ts` joins the write path
       to the read path: same instant in two zones, a Bahrain→London move mid-diary, the 23-hour and
       25-hour DST days, and a meal-only day staying unknown. Instants chosen so the UTC and local
@@ -150,7 +153,12 @@ the gate works on a fork's pull request exactly as on a branch.
       server page, a corrupt outbox payload, a 400-entry backlog, and the same record edited in two
       places. **Writing them found a real defect** — a failed pull rejected the whole run, skipped
       every remaining entity and was swallowed silently by `SyncProvider`. Fixed in ADR-0045
-- [ ] Assert report semantics match Insights semantics, and export semantics match Timeline
+- [x] **Surfaces agree — DONE.** `domain/__tests__/semantics.test.ts` pins the Insights screen, the
+      printed report and the exported file to the same answers: the same findings stand out, the
+      same ones are emerging, statuses match, and the report can never surface something the screen
+      suppressed — Insights is where the §21 conservatism lives, and the report is the artefact that
+      reaches a clinician. The export is asserted to carry every entry of every kind, with both the
+      instant and the local reading of every timestamp
 
 ### A4. Diagnostics and provenance (review §23–24) — **DONE**
 
