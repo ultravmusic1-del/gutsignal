@@ -4,26 +4,64 @@ import { migrate } from './migrator';
 
 export const DATABASE_NAME = 'gutsignal.db';
 
-let database: SQLite.SQLiteDatabase | null = null;
+let opening: Promise<SQLite.SQLiteDatabase> | null = null;
 
 /**
  * Opens the local database and brings it up to the current schema version.
- * Safe to call more than once — the handle is memoized.
+ *
+ * ## Why the *promise* is memoized, not the handle
+ *
+ * This used to memoize the resolved handle:
+ *
+ * ```ts
+ * if (database) return database;   // still null while the first call is awaiting
+ * ```
+ *
+ * which memoizes nothing during the several hundred milliseconds that matter. Around twenty call
+ * sites reach for the database on launch — `useAppBoot`, `SyncProvider`, and every TanStack query
+ * behind the first screen — and they all start before any of them finishes. Each saw `null`, each
+ * opened the database (`expo-sqlite` hands back the *same* native connection for a given name),
+ * and each ran `migrate` on it at once.
+ *
+ * `withTransactionAsync` issues a literal `BEGIN`, and `expo-sqlite` says in its own documentation
+ * that it "is not exclusive and can be interrupted by other async queries". So two overlapping
+ * migrations meant two `BEGIN`s on one connection:
+ *
+ * ```text
+ * SQLiteErrorException: cannot start a transaction within a transaction
+ * ```
+ *
+ * The app could not start, and which migration it died on depended on how the two runs interleaved
+ * — which is why it looked like a fault in a particular migration rather than a race.
+ *
+ * Holding the in-flight promise makes every caller after the first await the same open, so the
+ * migration runs once. It is also why `migrate` needs no locking of its own: nothing else can be
+ * querying this connection yet, because the handle has not been handed out.
+ *
+ * A failed open clears the memo rather than caching the rejection — otherwise one bad launch would
+ * poison every retry for the lifetime of the process, and boot has a retry path (spec §21).
  */
-export async function openDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (database) return database;
+export function openDatabase(): Promise<SQLite.SQLiteDatabase> {
+  if (opening) return opening;
 
-  const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+  opening = (async () => {
+    const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
 
-  // WAL keeps reads responsive while the sync engine writes. Foreign keys are off by default
-  // in SQLite and must be enabled per connection.
-  await db.execAsync('PRAGMA journal_mode = WAL;');
-  await db.execAsync('PRAGMA foreign_keys = ON;');
+    // WAL keeps reads responsive while the sync engine writes. Foreign keys are off by default
+    // in SQLite and must be enabled per connection.
+    await db.execAsync('PRAGMA journal_mode = WAL;');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
 
-  await migrate(db);
+    await migrate(db);
 
-  database = db;
-  return db;
+    return db;
+  })();
+
+  opening.catch(() => {
+    opening = null;
+  });
+
+  return opening;
 }
 
 /** The migration runner and schema-version reader now live in `migrator.ts`. */
@@ -31,9 +69,16 @@ export { getSchemaVersion, migrate } from './migrator';
 
 /** Closes and forgets the handle. Used by account deletion and by tests. */
 export async function closeDatabase(): Promise<void> {
-  if (!database) return;
-  await database.closeAsync();
-  database = null;
+  const pending = opening;
+  if (!pending) return;
+
+  // Cleared first, so a caller arriving mid-close starts a fresh open rather than receiving a
+  // handle that is about to be closed underneath it.
+  opening = null;
+
+  // A close that races a failed open has nothing to close, and must not throw on the way out.
+  const db = await pending.catch(() => null);
+  if (db) await db.closeAsync();
 }
 
 /**
