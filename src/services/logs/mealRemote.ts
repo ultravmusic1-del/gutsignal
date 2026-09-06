@@ -17,6 +17,7 @@ import { MEAL_SIZES, MEAL_TAGS } from '@/domain/logs/meal';
 import { LOG_SOURCES } from '@/domain/logs/source';
 import type { SqlDatabase } from '@/services/db/sqlite';
 import { getSupabaseClient } from '@/services/supabase/client';
+import { keysetFilter, type SyncCursor } from '@/services/sync/cursors';
 import type { SyncableRow, SyncEntity } from '@/services/sync/syncEngine';
 
 import {
@@ -89,19 +90,23 @@ export function createMealSyncEntity(userId: string): SyncEntity {
       cursor,
       limit,
     }: {
-      cursor: string | null;
+      cursor: SyncCursor | null;
       limit: number;
     }): Promise<SyncableRow[]> {
       const supabase = getSupabaseClient();
 
+      // Keyset on `(updated_at, id)`. Meals are the entity most exposed to this: `upsert_meals`
+      // writes a whole batch in one transaction, so every meal in that batch shares an
+      // `updated_at` and a timestamp-only cursor could never page past a large one.
       let query = supabase
         .from('meal_logs')
         .select(MEAL_COLUMNS)
         .eq('user_id', userId)
         .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
         .limit(limit);
 
-      if (cursor !== null) query = query.gte('updated_at', cursor);
+      if (cursor !== null) query = query.or(keysetFilter(cursor));
 
       const { data, error } = await query;
       if (error) throw new Error(`meal_logs fetch failed: ${error.code ?? 'unknown'}`);

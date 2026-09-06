@@ -23,6 +23,7 @@ import { LOG_SOURCES } from '@/domain/logs/source';
 import { SYMPTOM_KEYS } from '@/domain/onboarding/options';
 import type { SqlDatabase } from '@/services/db/sqlite';
 import { getSupabaseClient } from '@/services/supabase/client';
+import { keysetFilter, type SyncCursor } from '@/services/sync/cursors';
 import type { SyncableRow, SyncEntity } from '@/services/sync/syncEngine';
 
 import {
@@ -106,21 +107,27 @@ function createSimpleLogEntity<TRow extends SyncableRow>(
       cursor,
       limit,
     }: {
-      cursor: string | null;
+      cursor: SyncCursor | null;
       limit: number;
     }): Promise<SyncableRow[]> {
       const supabase = getSupabaseClient();
 
       // RLS already confines this to the caller's rows; the explicit filter is what lets
       // Postgres use the (user_id, updated_at) index rather than scanning.
+      //
+      // Ordered by `(updated_at, id)` because `updated_at` is not unique — it is the transaction
+      // timestamp, so a batched write gives every row the same one. `id` makes the order total,
+      // which is what lets the cursor below advance past a tie group instead of returning it
+      // again. See `cursors.ts` for what happens without it.
       let query = supabase
         .from(tableName)
         .select(columns)
         .eq('user_id', userId)
         .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
         .limit(limit);
 
-      if (cursor !== null) query = query.gte('updated_at', cursor);
+      if (cursor !== null) query = query.or(keysetFilter(cursor));
 
       const { data, error } = await query;
       if (error) throw new Error(`${tableName} fetch failed: ${error.code ?? 'unknown'}`);

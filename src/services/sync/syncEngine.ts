@@ -26,7 +26,7 @@ import {
 } from './failureReason';
 import type { SqlDatabase } from '@/services/db/sqlite';
 
-import { readCursor, writeCursor } from './cursors';
+import { readCursor, writeCursor, type SyncCursor } from './cursors';
 import type { NetworkMonitor } from './network';
 import {
   claimDue,
@@ -68,8 +68,18 @@ export interface SyncEntity {
   /** Sends queued payloads to the server. Throws to signal failure — the engine backs off. */
   upsert(payloads: unknown[]): Promise<void>;
 
-  /** Everything changed at or after the cursor, oldest first. */
-  fetchChangedSince(args: { cursor: string | null; limit: number }): Promise<SyncableRow[]>;
+  /**
+   * Everything changed **strictly after** the cursor, ordered by `(updated_at, id)` ascending.
+   *
+   * Both halves of that are load-bearing. The order must be total — ordering by `updated_at`
+   * alone leaves ties in an order Postgres does not promise, and a page boundary inside a tie
+   * group then repeats rows instead of advancing. And the comparison must be strict on the pair,
+   * not on the timestamp: `updated_at > c.updatedAt OR (updated_at = c.updatedAt AND id > c.id)`.
+   *
+   * An implementation that sorts by `updated_at` only will pass every small-data test and lose
+   * rows in production the first time a transaction writes more than one page of them.
+   */
+  fetchChangedSince(args: { cursor: SyncCursor | null; limit: number }): Promise<SyncableRow[]>;
 
   /** Merges fetched rows into local storage, honouring unpushed local changes. */
   apply(
@@ -230,18 +240,24 @@ export function createSyncEngine({
       pulled += result.applied;
       skipped += result.skipped;
 
-      const newest = rows.reduce(
-        (latest, row) => (row.updated_at > latest ? row.updated_at : latest),
-        rows[0]?.updated_at ?? ''
-      );
+      // The last row of the page in `(updated_at, id)` order — not the largest `updated_at`.
+      // Taking the maximum timestamp was the whole defect: rows sharing that timestamp were
+      // indistinguishable, so a tie group wider than a page could never be paged past.
+      const last = rows[rows.length - 1];
+      if (last === undefined) break;
 
-      // The cursor is inclusive, so a page that cannot advance it is the last page. Without
-      // this the final page would repeat forever.
-      if (newest === '' || newest === cursor) break;
+      const next: SyncCursor = { updatedAt: last.updated_at, id: last.id };
 
-      cursor = newest;
-      await writeCursor(db, entity.tableName, newest, now());
+      // Strict keyset means every non-empty page advances, so there is no "cannot advance"
+      // case left to guard. This guard remains only to make a server that ignored the ordering
+      // contract stop rather than spin.
+      if (cursor !== null && next.updatedAt === cursor.updatedAt && next.id === cursor.id) break;
 
+      cursor = next;
+      await writeCursor(db, entity.tableName, next, now());
+
+      // A short page is the last page. With a strict cursor this is the only stop condition
+      // that matters, and it no longer depends on comparing timestamps.
       if (rows.length < PULL_PAGE_SIZE) break;
     }
 

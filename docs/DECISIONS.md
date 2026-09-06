@@ -1136,3 +1136,72 @@ reauthentication is protecting against here.
 **Storage is not touched, because no bucket exists.** When meal photos arrive (M7), objects under
 `meal-photos/{userId}/` must be removed in this function before the auth user goes. That is
 recorded in the function's own docstring, next to the code that will need changing.
+
+---
+
+## ADR-0043 — The pull cursor is a keyset on `(updated_at, id)`
+
+**Status:** Accepted · **Date:** 2026-09-06
+
+**Context.** The sync pull ordered by `updated_at` alone, asked for `updated_at >= cursor`, and
+advanced the cursor to the largest `updated_at` in the page, stopping when it could not advance.
+
+`updated_at` is written by a trigger using `now()`, which in Postgres is the **transaction**
+timestamp — identical for every row a transaction touches. Ties are therefore not an edge case,
+they are what every batched write produces: an `upsert_meals` call, a restore, or any future data
+migration doing `UPDATE symptom_logs SET ...`, which stamps the entire table with one value.
+
+Postgres promises nothing about the order of rows sharing a sort key, so a page boundary landing
+inside a tie group can return the same rows again. When the tie group is larger than
+`PULL_PAGE_SIZE` (200) the pull cannot get past it at all: page two returns 200 rows all bearing
+the cursor's timestamp, `newest === cursor`, and the loop stops.
+
+**The consequence is worse than the dropped page.** The cursor is rewritten to the same timestamp
+it already held, so every later run repeats the same stop. That entity never syncs again — not
+the remaining rows in the tie group, and not anything changed afterwards. Silent, permanent, and
+with no error anywhere.
+
+Measured against the live project with 250 rows written in one transaction: the old cursor pulled
+**200 of 250** and stopped; the keyset cursor pulled **250 of 250**.
+
+**Alternatives considered.** (a) `OFFSET`. (b) Widen the page until ties fit. (c) Keyset on
+`(updated_at, id)`.
+
+**Reason.** (c).
+
+(a) is not stable under concurrent writes — a row updated mid-pagination shifts the window and
+rows fall through the gap — and it degrades with depth, which is the same objection ADR-0037 made
+for the timeline.
+
+(b) is not a fix but a larger number to be exceeded later. A migration touching every row produces
+a tie group the size of the table, which no page size covers.
+
+`id` is a device-generated UUID, unique per row, so `(updated_at, id)` is a total order and every
+page strictly advances. This is the same conclusion ADR-0037 reached for the timeline's keyset —
+learned there, and not carried across to sync, which is the more interesting half of this entry.
+
+**Consequences.** `fetchChangedSince` takes a `SyncCursor` rather than a string and must order by
+`(updated_at, id)` with a strict pair comparison; the contract says so in the interface, where an
+implementer will actually read it. PostgREST has no row-value comparison, so `keysetFilter` writes
+the pair out longhand and quotes the timestamp, whose `:` and `+` the filter grammar would
+otherwise treat as syntax. The grammar was verified against the live API rather than assumed.
+
+The engine now advances to the **last row of the page** in cursor order rather than the maximum
+timestamp, and terminates on a short page. Taking the maximum was the defect itself.
+
+**Stored cursors upgrade in place.** Existing devices hold a bare timestamp; `parseCursor` reads
+one as `{ updatedAt, id: '' }`, and an empty id makes the first keyset query inclusive of that
+timestamp — so it re-fetches the whole tie group, which is exactly the set of rows the old cursor
+may have skipped. Re-applying is free because `applyServerRows` is idempotent and still refuses
+to overwrite unpushed local edits. There is no migration and no reset.
+
+**Indexes moved with it** (`20260906150000_sync_keyset_indexes.sql`). `(user_id, updated_at)`
+could serve the range scan but not the order, leaving Postgres to sort each tie group by `id`
+before applying the LIMIT — cheap for fifty meals, ruinous for the whole-table tie group this
+exists to survive. The two-column indexes are dropped rather than kept, being a leading prefix of
+the new ones and earning nothing for their write cost.
+
+**Tests.** Six scenarios in `syncEngine.test.ts`: a tie group one larger than a page, one far
+larger, one straddling a boundary, ties returned in a different order on every call (as Postgres
+is free to do), a row updated mid-pagination, and a tombstone sharing a timestamp with a live row.
+All six were confirmed to fail against the previous implementation before the fix was kept.

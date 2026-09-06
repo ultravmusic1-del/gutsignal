@@ -14,7 +14,7 @@ import {
   type SymptomLogRow,
 } from '@/services/logs/symptomRepository';
 
-import { readCursor } from '../cursors';
+import { readCursor, type SyncCursor } from '../cursors';
 import type { NetworkMonitor } from '../network';
 import { claimDue, pendingCount } from '../outbox';
 import { applyServerRows } from '@/services/logs/symptomRepository';
@@ -51,17 +51,47 @@ class FakeRemote {
     for (const row of rows) this.rows.set(row.id, row);
   }
 
+  /**
+   * Return rows sharing a timestamp in a rotating order, as Postgres is free to do. Off by
+   * default so the ordinary tests stay readable.
+   */
+  shuffleTies = false;
+  /** Fires before a page is served, so a test can change the data mid-pagination. */
+  onFetch: (() => void) | null = null;
+  private fetchCount = 0;
+
   async fetchChangedSince({
     cursor,
     limit,
   }: {
-    cursor: string | null;
+    cursor: SyncCursor | null;
     limit: number;
   }): Promise<SyncableRow[]> {
-    return [...this.rows.values()]
-      .filter((row) => cursor === null || row.updated_at >= cursor)
-      .sort((a, b) => a.updated_at.localeCompare(b.updated_at))
-      .slice(0, limit);
+    this.onFetch?.();
+    this.fetchCount += 1;
+
+    const after = (row: SymptomLogRow): boolean => {
+      if (cursor === null) return true;
+      if (row.updated_at !== cursor.updatedAt) return row.updated_at > cursor.updatedAt;
+      return row.id > cursor.id;
+    };
+
+    const matching = [...this.rows.values()].filter(after);
+
+    if (this.shuffleTies) {
+      // Rotate within each tie group, so no two calls agree on the order of a tie.
+      const offset = this.fetchCount;
+      matching.sort((a, b) => {
+        if (a.updated_at !== b.updated_at) return a.updated_at.localeCompare(b.updated_at);
+        const rotate = (id: string) =>
+          (Number(id.replace(/\D/g, '') || '0') + offset) % Math.max(this.rows.size, 1);
+        return rotate(a.id) - rotate(b.id);
+      });
+    } else {
+      matching.sort((a, b) => a.updated_at.localeCompare(b.updated_at) || a.id.localeCompare(b.id));
+    }
+
+    return matching.slice(0, limit);
   }
 }
 
@@ -265,15 +295,19 @@ describe('pull', () => {
     expect((await getSymptomLog(db, 'remote-1'))?.symptomType).toBe('cramping');
   });
 
+  // The cursor carries the row's id as well as its timestamp, because `updated_at` is not unique.
   it('advances the cursor so the next pull does not refetch everything', async () => {
     remote.rows.set('remote-1', serverRow());
     await engine().syncNow();
 
-    expect(await readCursor(db, 'symptom_logs')).toBe('2026-08-24T09:00:00.000Z');
+    expect(await readCursor(db, 'symptom_logs')).toEqual({
+      updatedAt: '2026-08-24T09:00:00.000Z',
+      id: 'remote-1',
+    });
   });
 
-  it('terminates when every row sits exactly on the cursor', async () => {
-    // The cursor is inclusive, so the last page always returns itself. This must not loop.
+  it('terminates when there is nothing after the cursor', async () => {
+    // A strict keyset means the page after the last row is empty rather than a repeat of it.
     remote.rows.set('remote-1', serverRow());
 
     await engine().syncNow();
@@ -364,5 +398,109 @@ describe('concurrent runs', () => {
     expect(first.pushed + second.pushed).toBeLessThanOrEqual(2);
     expect(remote.rows.size).toBe(1);
     expect(await pendingCount(db, 'symptom_logs')).toBe(0);
+  });
+});
+
+/**
+ * Pull pagination when timestamps collide (`CLAUDE.md` §15, §53).
+ *
+ * `updated_at` is written by a trigger using `now()`, which in Postgres is the *transaction*
+ * timestamp — constant for every row a transaction touches. So identical timestamps are not an
+ * edge case to be defended against, they are the normal result of any batched write: an
+ * `upsert_meals` call, a restore, or a future data migration that does
+ * `UPDATE symptom_logs SET ...` and stamps every row in the table with one value.
+ *
+ * Ordering by `updated_at` alone leaves the order *within* a tie unspecified — Postgres makes no
+ * promise there — so a page boundary that lands inside a tie group can return the same rows
+ * forever. When a tie group is larger than one page the pull cannot advance past it at all, and
+ * because the cursor is rewritten to that same stuck timestamp, the entity never syncs again.
+ * Silent, permanent, and invisible to every other test in this file.
+ *
+ * The fix is a keyset cursor on `(updated_at, id)`. These tests are the reason it exists.
+ */
+describe('pull pagination with colliding timestamps', () => {
+  const COLLIDING = '2026-08-24T12:00:00.000Z';
+
+  /** `count` rows that all share one `updated_at`, as a batched write produces. */
+  function fillTiedRows(count: number, updatedAt = COLLIDING): void {
+    for (let i = 0; i < count; i += 1) {
+      const id = `tied-${String(i).padStart(4, '0')}`;
+      remote.rows.set(id, serverRow({ id, updated_at: updatedAt }));
+    }
+  }
+
+  const pullAll = async () => {
+    // Several runs, because a correct engine may legitimately need more than one to drain a
+    // backlog — but a wedged one will not improve no matter how many it gets.
+    for (let run = 0; run < 5; run += 1) await engine().syncNow();
+    return (await listRecentSymptomLogs(db, { userId: USER, limit: 1000 })).length;
+  };
+
+  it('pulls every row when a tie group is one larger than a page', async () => {
+    fillTiedRows(201);
+
+    expect(await pullAll()).toBe(201);
+  });
+
+  it('pulls every row when a tie group is far larger than a page', async () => {
+    fillTiedRows(500);
+
+    expect(await pullAll()).toBe(500);
+  });
+
+  it('pulls every row when a tie group straddles a page boundary', async () => {
+    // 150 earlier rows, then a tie group that begins mid-page and runs past its end.
+    for (let i = 0; i < 150; i += 1) {
+      const id = `early-${String(i).padStart(4, '0')}`;
+      remote.rows.set(id, serverRow({ id, updated_at: '2026-08-24T11:00:00.000Z' }));
+    }
+    fillTiedRows(300);
+
+    expect(await pullAll()).toBe(450);
+  });
+
+  /**
+   * Postgres guarantees nothing about the order of rows sharing a sort key, and a plan change is
+   * enough to alter it between one query and the next. A cursor that assumes yesterday's order
+   * is a cursor that loses rows the day the planner changes its mind.
+   */
+  it('pulls every row even when the server returns ties in a different order each time', async () => {
+    remote.shuffleTies = true;
+    fillTiedRows(250);
+
+    expect(await pullAll()).toBe(250);
+  });
+
+  it('does not lose rows when one is updated while pagination is in progress', async () => {
+    fillTiedRows(250);
+
+    // Halfway through draining, a row is touched again and moves to a later timestamp — exactly
+    // what another device syncing at the same moment would cause.
+    remote.onFetch = () => {
+      remote.rows.set(
+        'tied-0000',
+        serverRow({ id: 'tied-0000', updated_at: '2026-08-24T13:00:00.000Z' })
+      );
+      remote.onFetch = null;
+    };
+
+    expect(await pullAll()).toBe(250);
+  });
+
+  // A tombstone is just a row, and it shares the transaction timestamp of whatever else was
+  // written with it. Losing one leaves a deleted entry alive on this device for good.
+  it('applies a tombstone that shares a timestamp with a live row', async () => {
+    fillTiedRows(250);
+    remote.rows.set(
+      'tied-0000',
+      serverRow({ id: 'tied-0000', updated_at: COLLIDING, deleted_at: COLLIDING })
+    );
+
+    await pullAll();
+
+    // A tombstone lands as `deletedAt`, and the row drops out of the timeline — the same shape
+    // the existing deletion test asserts, just arriving from deep inside a tie group.
+    expect((await getSymptomLog(db, 'tied-0000'))?.deletedAt).toBe(COLLIDING);
+    expect((await listRecentSymptomLogs(db, { userId: USER, limit: 1000 })).length).toBe(249);
   });
 });
