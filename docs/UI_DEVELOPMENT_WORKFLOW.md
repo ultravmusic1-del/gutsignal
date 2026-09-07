@@ -125,9 +125,13 @@ Found by running the app on web, not predicted.
   other tab. This is a web storage constraint, not an app bug.
 - **`expo-notifications`** warns that push token listening is unsupported. Local scheduling is not
   exercised on web at all — reminders are verified on a device.
-- **Console noise from `react-native-web`.** `"shadow*" style props are deprecated`,
-  `props.pointerEvents is deprecated`, and an `accessibilityElementsHidden` DOM warning from
-  react-navigation. All from library internals, all cosmetic on web, none reproduced on native.
+- **Console noise from `react-native-web`.** `"shadow*" style props are deprecated` and
+  `props.pointerEvents is deprecated`, both from library internals and both cosmetic on web.
+
+  The `accessibilityElementsHidden` warning that used to be listed here was **ours**: `Divider`,
+  `Icon` and `StatusPill` passed the iOS/Android prop pair straight through to the DOM. They now
+  use `aria-hidden`, which React Native maps to both on native. The console is clean, which is the
+  point — noise you have learned to ignore is noise that hides the next real warning.
 
 ### Cannot be judged on web at all
 
@@ -137,10 +141,14 @@ performance · anything about launch time.
 
 ### Not incompatibilities, but worth knowing
 
-- **Signed out, `/today` shows "Loading today's entries…" forever.** Its queries are
-  `enabled: Boolean(userId)`, and a disabled TanStack query reports `isPending` permanently. In the
-  app this is unreachable — the boot gate resolves a session before `/today` exists — but on web
-  you can navigate straight to a URL and get there. Useful for looking at layout; not a real state.
+- **Signed out, the data screens show their empty state rather than their content.** Their queries
+  are `enabled: Boolean(userId)`, so opening a URL directly gets you the layout without the data —
+  useful for spacing and typography, and not a state a real user reaches.
+
+  They used to show a spinner forever instead, because they gated on `isPending`, which is true for
+  a query that is disabled and never going to run. `isLoading` is the one that means "fetching".
+  Fixed — and found by this surface within an hour of it existing.
+
 - **The stack header renders light on a dark screen.** A react-navigation web default; the native
   header follows the system appearance.
 - **An "off" `ToggleRow` switch renders as a bare circle with no track.** `ToggleRow` sets
@@ -163,17 +171,21 @@ canvas agrees with itself and disagrees with the app.
 Current coverage — the reusable primitives and the one component where the wording carries real
 risk:
 
-| Story                      | Why it exists                                                    |
-| -------------------------- | ---------------------------------------------------------------- |
-| `Design system/Typography` | The whole ramp at once — the only way to see two variants drift. |
-| `UI/Button`                | Five variants, loading, disabled, and a label that cannot fit.   |
-| `UI/Card`                  | Three elevations together, where a wrong choice becomes obvious. |
-| `UI/Chip`                  | Filter row and symptom multi-select, at real wrapping widths.    |
-| `UI/EmptyState`            | The state a new user sees for weeks, with the real §32 copy.     |
-| `UI/TextField`             | Error as text rather than a red border (§36).                    |
-| `UI/SelectCard`            | Onboarding options with descriptions of uneven length.           |
-| `UI/ToggleRow`             | Including "on, and will never fire" — the §75 warning state.     |
-| `Insights/FindingCard`     | Every status, three limitations, long factors, and as a list.    |
+| Story                      | Why it exists                                                     |
+| -------------------------- | ----------------------------------------------------------------- |
+| `Design system/Typography` | The whole ramp at once — the only way to see two variants drift.  |
+| `UI/Metric`                | A number set as the point of its card. `Grid` is the one to open. |
+| `UI/SectionHeader`         | `AsAPage` — a heading is judged by what it separates.             |
+| `UI/StatusPill`            | Every tone together, to check none of them shouts.                |
+| `UI/Button`                | Five variants, loading, disabled, a label that cannot fit.        |
+| `UI/Card`                  | Three elevations together, where a wrong choice shows.            |
+| `UI/Chip`                  | Filter row and symptom multi-select, at real wrapping widths.     |
+| `UI/EmptyState`            | The state a new user sees for weeks, with the real §32 copy.      |
+| `UI/TextField`             | Error as text rather than a red border (§36).                     |
+| `UI/SelectCard`            | Onboarding options with descriptions of uneven length.            |
+| `UI/ToggleRow`             | Including "on, and will never fire" — the §75 warning state.      |
+| `Insights/FindingCard`     | Every status, three limitations, long factors, and as a list.     |
+| `Reports/WeeklySummary`    | The screen that needs a session and a full database to see.       |
 
 ---
 

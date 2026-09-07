@@ -103,16 +103,22 @@ export function TodayEntries() {
 
   if (entries.length === 0) {
     return (
+      /* Shorter than it was, and pointing at the right control.
+
+         It used to end with "Use the + button to add an entry", which stopped being true the day
+         the quick-log tiles arrived directly above it — the hint was sending people past the
+         faster route to the slower one. And four lines of body copy explaining what a diary is for
+         is a lot to put between someone and their day, every day, until they log something.
+
+         What survives is the part that is actually useful to a new user: that an ordinary day is
+         worth recording, which is the least obvious thing about this app and the one the pattern
+         engine most depends on. */
       <Card>
         <Text variant="cardTitle">Nothing logged today</Text>
         <View style={{ height: theme.spacing.xxs }} />
         <Text variant="body" color="secondary">
-          Your day starts empty. Anything you record — a meal, a symptom, a bowel movement, or
-          simply that you feel good — becomes part of what GutSignal can compare later.
-        </Text>
-        <View style={{ height: theme.spacing.sm }} />
-        <Text variant="caption" color="tertiary">
-          Use the + button to add an entry.
+          A meal, a symptom, or simply that you feel fine — the ordinary days count as much as the
+          difficult ones.
         </Text>
       </Card>
     );
