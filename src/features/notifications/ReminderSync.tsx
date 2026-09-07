@@ -8,6 +8,8 @@ import { createExpoNotificationProvider } from '@/services/notifications/expoNot
 import { loadNotificationPreferences } from '@/services/notifications/preferencesRepository';
 import { syncReminders } from '@/services/notifications/reminders';
 
+import { useNotificationRouting } from './useNotificationRouting';
+
 /**
  * Keeps the OS holding what the user asked for, without them visiting the settings screen.
  *
@@ -28,6 +30,11 @@ import { syncReminders } from '@/services/notifications/reminders';
  */
 export function ReminderSync() {
   const { userId } = useAuth();
+
+  // Where a tapped reminder lands. Mounted here rather than in its own component because both
+  // halves of the notification lifecycle belong together: what gets scheduled, and where it goes.
+  useNotificationRouting();
+
   const profile = useProfile();
 
   const trackingStyle =

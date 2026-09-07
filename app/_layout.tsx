@@ -153,6 +153,16 @@ export default function RootLayout() {
                         headerBackTitle: 'You',
                       }}
                     />
+                    {/* Where the weekly reminder lands. Pushed with a real header, because it is
+                    often the first screen of a cold launch and needs a way back. */}
+                    <Stack.Screen
+                      name="weekly-review"
+                      options={{
+                        headerShown: true,
+                        headerTitle: 'Your week',
+                        headerBackTitle: 'Insights',
+                      }}
+                    />
                     <Stack.Screen
                       name="notifications"
                       options={{

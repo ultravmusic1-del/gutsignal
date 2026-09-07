@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { View } from 'react-native';
 
-import { Card, EmptyState, Screen, Text } from '@/components/ui';
+import { Button, Card, EmptyState, Screen, Text } from '@/components/ui';
 import type { Finding } from '@/domain/pattern-engine/types';
 import { encodeFindingId } from '@/domain/patterns/findingDetail';
 import { readinessCopy } from '@/domain/patterns/insights';
@@ -26,9 +26,12 @@ import { useTheme } from '@/theme';
  * is waiting for rather than "nothing yet", and it never promises a finding will appear: it may
  * genuinely be that nothing in this diary relates to anything else.
  *
- * Gut Map, Trends, Experiments and Weekly review are also §49 sections. They are not here
- * because they need data or milestones that do not exist yet, and a heading over an empty box
- * is the placeholder this product does not ship.
+ * Gut Map and Trends are the other §49 sections, and both appear below once there is enough to
+ * draw. The weekly review is a screen of its own rather than a section here — it is where the
+ * weekly reminder lands, so it needs a route — and is reached from the header.
+ *
+ * Experiments (Milestone 11) is the one §49 section still absent, and it stays absent: a heading
+ * over an empty box is the placeholder this product does not ship.
  */
 export default function InsightsScreen() {
   const theme = useTheme();
@@ -60,11 +63,23 @@ export default function InsightsScreen() {
   );
 
   const header = (
-    <View style={{ gap: theme.spacing.xxs }}>
-      <Text variant="title">Insights</Text>
-      <Text variant="caption" color="secondary">
-        What recurs in your own records — never a diagnosis, and never a cause.
-      </Text>
+    <View style={{ gap: theme.spacing.sm }}>
+      <View style={{ gap: theme.spacing.xxs }}>
+        <Text variant="title">Insights</Text>
+        <Text variant="caption" color="secondary">
+          What recurs in your own records — never a diagnosis, and never a cause.
+        </Text>
+      </View>
+
+      {/* The weekly review is also where the weekly reminder lands. It is reachable here so it
+          does not depend on a notification the user may have switched off. */}
+      <Button
+        label="Your week"
+        variant="secondary"
+        size="medium"
+        haptic={false}
+        onPress={() => router.push('/weekly-review')}
+      />
     </View>
   );
 
