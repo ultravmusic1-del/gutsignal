@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Card, Screen, Text } from '@/components/ui';
 import { greetingForHour } from '@/domain/time/greeting';
 import { FirstInsightProgress } from '@/features/insights/FirstInsightProgress';
+import { HowItWorks } from '@/features/insights/HowItWorks';
 import { QuickLogTiles } from '@/features/logs/QuickLogTiles';
 import { TodayEntries } from '@/features/logs/TodayEntries';
 import { useLoggedToday } from '@/features/logs/useLoggedToday';
@@ -49,44 +50,16 @@ export default function TodayScreen() {
             working, and a heading with nothing under it is worse than no heading. */}
         <FirstInsightProgress />
 
-        <View style={{ gap: theme.spacing.sm }}>
-          <Text variant="overline" color="secondary">
-            HOW GUTSIGNAL WORKS
+        <HowItWorks />
+
+        {/* Permanent, and deliberately not part of HowItWorks. A disclaimer that retires once the
+            user is engaged is one shown only to the people least likely to need it (§17, §56). */}
+        <Card elevation="flat">
+          <Text variant="caption" color="secondary">
+            GutSignal identifies associations in your data. It does not diagnose conditions or prove
+            that one factor caused a symptom.
           </Text>
-
-          <Card>
-            <View style={{ gap: theme.spacing.md }}>
-              <View style={{ gap: 2 }}>
-                <Text variant="cardTitle">Log normally</Text>
-                <Text variant="body" color="secondary">
-                  Food, symptoms and bowel patterns — in seconds, not forms.
-                </Text>
-              </View>
-
-              <View style={{ gap: 2 }}>
-                <Text variant="cardTitle">Find repeating signals</Text>
-                <Text variant="body" color="secondary">
-                  GutSignal compares what you record over time and looks for associations that
-                  recur.
-                </Text>
-              </View>
-
-              <View style={{ gap: 2 }}>
-                <Text variant="cardTitle">Test assumptions</Text>
-                <Text variant="body" color="secondary">
-                  Explore the factors you already suspect, without jumping to conclusions.
-                </Text>
-              </View>
-            </View>
-          </Card>
-
-          <Card elevation="flat">
-            <Text variant="caption" color="secondary">
-              GutSignal identifies associations in your data. It does not diagnose conditions or
-              prove that one factor caused a symptom.
-            </Text>
-          </Card>
-        </View>
+        </Card>
       </View>
     </Screen>
   );

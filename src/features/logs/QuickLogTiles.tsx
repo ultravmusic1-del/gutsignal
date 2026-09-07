@@ -82,28 +82,42 @@ export function QuickLogTiles({ loggedToday, hour }: { loggedToday: LoggedToday;
   return (
     <View style={{ gap: theme.spacing.xs }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs }}>
-        {actions.map((action) => (
-          <Pressable
-            key={action.key}
-            accessibilityRole="button"
-            accessibilityLabel={label(action)}
-            accessibilityState={{ busy: action.immediate && logWellbeing.isPending }}
-            disabled={action.immediate && logWellbeing.isPending}
-            onPress={() => onPress(action)}
-            style={({ pressed }) => ({
-              minHeight: 44,
-              justifyContent: 'center',
-              paddingHorizontal: theme.spacing.md,
-              borderRadius: theme.radius.pill,
-              backgroundColor: theme.colors.surface.card,
-              borderWidth: 1,
-              borderColor: theme.colors.border.strong,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text variant="body">{action.label}</Text>
-          </Pressable>
-        ))}
+        {actions.map((action, index) => {
+          /* The first tile is filled, the rest are outlined.
+
+             Every tile looked identical, which made the row read as a set of filters rather than
+             as the primary thing to do on the screen — and made "which of these should I tap"
+             a question the user had to answer alone. `quickActions` already decides which entry is
+             most likely right now; this is that decision made visible.
+
+             Exactly one is filled. Two accents in a row is not a hierarchy, it is a pair. */
+          const leading = index === 0;
+
+          return (
+            <Pressable
+              key={action.key}
+              accessibilityRole="button"
+              accessibilityLabel={label(action)}
+              accessibilityState={{ busy: action.immediate && logWellbeing.isPending }}
+              disabled={action.immediate && logWellbeing.isPending}
+              onPress={() => onPress(action)}
+              style={({ pressed }) => ({
+                minHeight: 44,
+                justifyContent: 'center',
+                paddingHorizontal: theme.spacing.md,
+                borderRadius: theme.radius.pill,
+                backgroundColor: leading ? theme.colors.accent.solid : theme.colors.surface.card,
+                borderWidth: 1,
+                borderColor: leading ? theme.colors.accent.solid : theme.colors.border.strong,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text variant="button" color={leading ? 'onAccent' : 'primary'}>
+                {action.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {error !== null ? (
