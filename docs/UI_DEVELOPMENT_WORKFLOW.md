@@ -143,6 +143,11 @@ performance · anything about launch time.
   you can navigate straight to a URL and get there. Useful for looking at layout; not a real state.
 - **The stack header renders light on a dark screen.** A react-navigation web default; the native
   header follows the system appearance.
+- **An "off" `ToggleRow` switch renders as a bare circle with no track.** `ToggleRow` sets
+  `trackColor={{ true: … }}` only, and `react-native-web` supplies no default for the false track,
+  so on a dark surface there is nothing behind the thumb. iOS draws its own grey track, so this is
+  very likely web-only — but it has **not** been confirmed on a device, and if it turns out to be
+  real it is a §36 problem rather than a cosmetic one. Check it on the next device pass.
 
 ---
 
