@@ -16,6 +16,8 @@ import {
 import { SYMPTOMS } from '@/domain/onboarding/options';
 import { useSymptomLogForEdit, useUpdateSymptomLog } from '@/features/logs/useEditLog';
 import { useLogSymptom } from '@/features/logs/useSymptomLogs';
+import { EditLoadGate } from '@/features/logs/EditLoadGate';
+import { canShowForm, editLoadState } from '@/features/logs/editLoadState';
 import { useTheme } from '@/theme';
 
 /**
@@ -123,6 +125,11 @@ export default function LogSymptomScreen() {
       setSubmitError('That could not be saved on this device. Please try again.');
     }
   };
+
+  // An edit whose entry has not arrived must not render a form: it would carry the defaults
+  // and the real id, and saving would write those defaults over the entry. See editLoadState.
+  const loadState = editLoadState(id, existing);
+  if (!canShowForm(loadState)) return <EditLoadGate state={loadState} />;
 
   return (
     <Screen scroll>

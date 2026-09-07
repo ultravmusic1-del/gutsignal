@@ -18,6 +18,8 @@ import {
 } from '@/domain/logs/context';
 import { useContextLogForEdit, useUpdateContextLog } from '@/features/logs/useEditLog';
 import { useLogContext } from '@/features/logs/useSimpleLogs';
+import { EditLoadGate } from '@/features/logs/EditLoadGate';
+import { canShowForm, editLoadState } from '@/features/logs/editLoadState';
 import { useTheme } from '@/theme';
 
 /**
@@ -114,6 +116,11 @@ export default function LogContextScreen() {
       setSaving(false);
     }
   };
+
+  // An edit whose entry has not arrived must not render a form: it would carry the defaults
+  // and the real id, and saving would write those defaults over the entry. See editLoadState.
+  const loadState = editLoadState(id, existing);
+  if (!canShowForm(loadState)) return <EditLoadGate state={loadState} />;
 
   return (
     <Screen scroll>

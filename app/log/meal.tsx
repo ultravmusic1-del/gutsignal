@@ -19,6 +19,8 @@ import {
 import { formatLocalTime } from '@/domain/time/occurrence';
 import { useMealForEdit, useUpdateMeal } from '@/features/logs/useEditLog';
 import { useLogMeal, useRecentMeals, useRepeatMeal } from '@/features/logs/useMealLogs';
+import { EditLoadGate } from '@/features/logs/EditLoadGate';
+import { canShowForm, editLoadState } from '@/features/logs/editLoadState';
 import { useTheme } from '@/theme';
 
 /**
@@ -134,6 +136,11 @@ export default function LogMealScreen() {
   };
 
   const recentMeals = recent.data ?? [];
+
+  // An edit whose entry has not arrived must not render a form: it would carry the defaults
+  // and the real id, and saving would write those defaults over the entry. See editLoadState.
+  const loadState = editLoadState(id, existing);
+  if (!canShowForm(loadState)) return <EditLoadGate state={loadState} />;
 
   return (
     <Screen scroll>
