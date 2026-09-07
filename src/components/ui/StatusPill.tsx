@@ -67,8 +67,12 @@ export function StatusPill({ label, tone = 'neutral', style }: StatusPillProps) 
       <View
         // Decorative, and marked as such: the label beside it already carries the meaning, so a
         // screen reader announcing a second thing here would only add noise.
-        accessibilityElementsHidden
-        importantForAccessibility="no"
+        //
+        // `aria-hidden` rather than the `accessibilityElementsHidden` /
+        // `importantForAccessibility` pair. React Native maps it to both on native, and
+        // react-native-web maps it to the real DOM attribute — where the older props are passed
+        // through verbatim and React warns about an unrecognised attribute on every render.
+        aria-hidden
         style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colour }}
       />
       <Text variant="caption" style={{ color: colour }}>

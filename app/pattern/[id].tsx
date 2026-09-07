@@ -2,7 +2,16 @@ import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Card, Divider, EmptyState, Screen, Text } from '@/components/ui';
+import {
+  Card,
+  Divider,
+  EmptyState,
+  Metric,
+  Screen,
+  SectionHeader,
+  StatusPill,
+  Text,
+} from '@/components/ui';
 import {
   calculationSteps,
   comparisonNumbers,
@@ -17,6 +26,7 @@ import { outcomeLabel } from '@/domain/patterns/outcomeLabels';
 import { PATTERN_STATUS_COPY } from '@/domain/patterns/status';
 import { useScreenView } from '@/features/analytics/useScreenView';
 import { track } from '@/services/analytics/analytics';
+import { STATUS_TONE } from '@/features/insights/statusTone';
 import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
 
@@ -85,14 +95,19 @@ export default function PatternDetailScreen() {
     <Screen scroll topInset={false} floatingNav>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.lg }}>
         {/* Header: what this is about, how strong it is, and how much it rests on. */}
-        <View style={{ gap: theme.spacing.xxs }}>
+        <View style={{ gap: theme.spacing.xs, alignItems: 'flex-start' }}>
           <Text variant="title">{finding.factor.label}</Text>
-          <Text variant="body" color="secondary">
-            {status.label} · {finding.metrics.exposedCount}{' '}
-            {finding.metrics.exposedCount === 1 ? 'day' : 'days'} recorded with it
-          </Text>
-          <Text variant="caption" color="tertiary">
-            {formatLocalDate(finding.analysisStart)} to {formatLocalDate(finding.analysisEnd)}
+
+          {/* The status as a pill, matching the card the user tapped to get here. It used to be
+              the first half of a body sentence — "Moderate signal · 12 days recorded with it" —
+              which asked the reader to parse a status and a sample size out of one line, and made
+              the strength of the evidence look like a caption. */}
+          <StatusPill label={status.label} tone={STATUS_TONE[finding.status]} />
+
+          <Text variant="caption" color="secondary">
+            {finding.metrics.exposedCount} {finding.metrics.exposedCount === 1 ? 'day' : 'days'}{' '}
+            recorded with it · {formatLocalDate(finding.analysisStart)} to{' '}
+            {formatLocalDate(finding.analysisEnd)}
           </Text>
         </View>
 
@@ -224,18 +239,30 @@ export default function PatternDetailScreen() {
   );
 }
 
+/**
+ * A titled group on this screen.
+ *
+ * Now the shared `SectionHeader`, so the evidence screen is laid out the same way as Insights and
+ * the weekly review. It previously used a bare overline, which is why the three screens a user
+ * moves between while following one finding each looked like a different product.
+ *
+ * Titles arrive in caps from the call sites; the header lowercases them into a sentence-case title
+ * with its own small overline above, which is what stops a screen of five all-caps lines reading
+ * as five equally shouty things.
+ */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const theme = useTheme();
 
   return (
     <View style={{ gap: theme.spacing.sm }}>
-      <Text variant="overline" color="secondary">
-        {title}
-      </Text>
+      <SectionHeader title={sentenceCase(title)} />
       {children}
     </View>
   );
 }
+
+/** "WHAT WE OBSERVED" to "What we observed". */
+const sentenceCase = (value: string) => value.charAt(0) + value.slice(1).toLocaleLowerCase();
 
 /**
  * One side of the comparison.
@@ -245,17 +272,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * intensity finding as one.
  */
 function ValueColumn({ label, value, days }: { label: string; value: string; days: number }) {
-  const theme = useTheme();
-
   return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text variant="metric">{value}</Text>
-      <Text variant="caption" color="secondary" style={{ marginTop: theme.spacing.xxs }}>
-        {label}
-      </Text>
-      <Text variant="caption" color="tertiary">
-        {days} {days === 1 ? 'day' : 'days'}
-      </Text>
-    </View>
+    // The two sides of a comparison are the one place in the app where two numbers must be read
+    // against each other, so they are the strongest case for a shared metric treatment: tabular
+    // figures line the two values up, and the reserved label height keeps them on the same
+    // baseline whether or not one group's name wraps.
+    //
+    // `basis` is the day count. It was already here as a third line of caption — putting it in the
+    // slot named for it is what stops a future edit separating a figure from its denominator.
+    <Metric
+      label={label}
+      value={value}
+      basis={`${days} ${days === 1 ? 'day' : 'days'}`}
+      style={{ flex: 1 }}
+    />
   );
 }

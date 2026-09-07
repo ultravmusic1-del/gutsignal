@@ -115,7 +115,13 @@ describe('PatternDetailScreen', () => {
     await renderWithTheme();
 
     expect(screen.getByText('Dairy')).toBeTruthy();
-    expect(screen.getByText(/Moderate signal · 18 days recorded with it/)).toBeTruthy();
+
+    // The status and the sample size, asserted as two facts rather than as one composed sentence.
+    // They used to share a line — "Moderate signal · 18 days recorded with it" — which asked the
+    // reader to parse a status and a sample size out of a single caption. Pinning that exact
+    // string tied the test to a layout decision rather than to what the screen has to say.
+    expect(screen.getByText(/moderate signal/i)).toBeTruthy();
+    expect(screen.getByText(/18 days recorded with it/)).toBeTruthy();
     expect(screen.getByText(/Bloating was recorded more often/)).toBeTruthy();
   });
 

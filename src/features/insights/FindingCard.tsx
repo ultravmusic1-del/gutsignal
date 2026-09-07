@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Card, StatusPill, Text, type StatusTone } from '@/components/ui';
+import { Card, StatusPill, Text } from '@/components/ui';
 import { comparisonNumbers, observationSentence } from '@/domain/patterns/findingDetail';
 import { findingSpeech } from '@/domain/patterns/findingSpeech';
-import { PATTERN_STATUS_COPY, type PatternStatus } from '@/domain/patterns/status';
+import { PATTERN_STATUS_COPY } from '@/domain/patterns/status';
 import type { Finding } from '@/domain/pattern-engine/types';
+import { STATUS_TONE } from '@/features/insights/statusTone';
 import { useTheme } from '@/theme';
 
 /**
@@ -23,24 +24,6 @@ import { useTheme } from '@/theme';
 type Props = {
   finding: Finding;
   onPress?: (finding: Finding) => void;
-};
-
-/**
- * What the pill's colour marks: **how much evidence there is**, never whether the news is good.
- *
- * A finding is not positive or negative. "Symptoms were recorded more often following dairy" is
- * not bad news any more than its absence is good news, and tinting it red or green would be the
- * app taking a view on someone's health that §17 forbids it from having.
- *
- * So the accent marks the two statuses that rest on enough evidence to lead with, and everything
- * else is neutral. The word in the pill is what actually distinguishes them.
- */
-const STATUS_TONE: Record<PatternStatus, StatusTone> = {
-  stronger_recurring_signal: 'accent',
-  moderate: 'accent',
-  emerging: 'neutral',
-  no_clear_pattern: 'neutral',
-  insufficient_data: 'neutral',
 };
 
 function FindingCardComponent({ finding, onPress }: Props) {

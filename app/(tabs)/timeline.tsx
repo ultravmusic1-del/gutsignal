@@ -91,18 +91,15 @@ export default function TimelineScreen() {
         <Text variant="title">Timeline</Text>
       </View>
 
-      <View style={{ paddingHorizontal: theme.spacing.gutter }}>
-        <TextField
-          label="Search"
-          hint="Meals, items and anything you noted"
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
-      </View>
+      {/* Filters before search.
 
+          This screen is scrolled far more often than it is searched, and search was taking the
+          three most valuable elements on it: a "Search" label, an empty field, and a hint —
+          roughly a fifth of the screen before a single entry appeared. Slicing by kind is the
+          common move and it is now the first control; search sits under it, still one tap away.
+
+          The label and hint are folded into the placeholder. A visible label above an empty field
+          whose placeholder says the same thing is the field described twice. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -120,6 +117,19 @@ export default function TimelineScreen() {
           />
         ))}
       </ScrollView>
+
+      <View style={{ paddingHorizontal: theme.spacing.gutter }}>
+        <TextField
+          label="Search"
+          labelHidden
+          placeholder="Search meals, items and notes"
+          value={search}
+          onChangeText={setSearch}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+      </View>
     </View>
   );
 
