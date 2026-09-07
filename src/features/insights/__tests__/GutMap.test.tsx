@@ -101,21 +101,29 @@ describe('GutMap', () => {
     expect(onSelect).toHaveBeenCalledWith(finding);
   });
 
-  // A bare factor name read aloud says nothing about what tapping it does, or how much it rests on.
-  it('describes a row as one phrase to assistive technology', async () => {
+  /**
+   * The group is part of the row, not decoration around it.
+   *
+   * Rows are navigated one at a time under VoiceOver, so a label of "Dairy, 3 comparisons" leaves
+   * the listener unable to tell whether dairy stands out or is one of the things the engine looked
+   * at and found nothing in — which is the entire point of the Gut Map (§52). The heading is a
+   * separate element and reachable, but only by someone who happens to pass through it.
+   */
+  it('names the group a row belongs to, not just the factor', async () => {
     await renderMap([
       aFinding(DAIRY, 'moderate', 0.7),
       aFinding(DAIRY, 'moderate', 0.6),
       aFinding(DAIRY, 'moderate', 0.5),
     ]);
 
-    expect(screen.getByRole('button', { name: 'Dairy, 3 comparisons' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Dairy, 3 comparisons$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Stronger signals: / })).toBeTruthy();
   });
 
   it('counts a single comparison in the singular', async () => {
     await renderMap([aFinding(SLEEP, 'emerging')]);
 
-    expect(screen.getByRole('button', { name: 'Poorer sleep, 1 comparison' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Poorer sleep, 1 comparison$/ })).toBeTruthy();
   });
 
   // §52: "Do not make Gut Map look like medical diagnosis output."

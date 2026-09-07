@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
 import { comparisonNumbers, observationSentence } from '@/domain/patterns/findingDetail';
+import { findingSpeech } from '@/domain/patterns/findingSpeech';
 import { PATTERN_STATUS_COPY } from '@/domain/patterns/status';
 import type { Finding } from '@/domain/pattern-engine/types';
 import { useTheme } from '@/theme';
@@ -81,7 +82,10 @@ function FindingCardComponent({ finding, onPress }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${status.label}. ${headline}`}
+      // The whole card, not just its headline. A Pressable with a label is one accessibility
+      // element and the label replaces its children, so anything left out of it is not read —
+      // including the counts and the limitations the card exists to put in front of people.
+      accessibilityLabel={findingSpeech(finding)}
       accessibilityHint="Opens the evidence behind this"
       onPress={() => onPress(finding)}
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}

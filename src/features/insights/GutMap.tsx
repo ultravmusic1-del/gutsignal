@@ -45,7 +45,7 @@ function GutMapComponent({ groups, onSelect }: Props) {
             {group.entries.map((entry, index) => (
               <View key={entry.factor.key}>
                 {index > 0 ? <Divider /> : null}
-                <GutMapRow entry={entry} onSelect={onSelect} />
+                <GutMapRow entry={entry} groupTitle={group.title} onSelect={onSelect} />
               </View>
             ))}
           </Card>
@@ -55,12 +55,22 @@ function GutMapComponent({ groups, onSelect }: Props) {
   );
 }
 
-function GutMapRow({ entry, onSelect }: { entry: GutMapEntry; onSelect: Props['onSelect'] }) {
+function GutMapRow({
+  entry,
+  groupTitle,
+  onSelect,
+}: {
+  entry: GutMapEntry;
+  groupTitle: string;
+  onSelect: Props['onSelect'];
+}) {
   const theme = useTheme();
 
-  // Spoken as one phrase, so VoiceOver does not read a bare factor name with no indication of
-  // what opening it would show.
-  const accessibilityLabel = `${entry.factor.label}, ${entry.findingCount} ${
+  // The group is part of the row's meaning, not decoration around it. Rows are navigated one by
+  // one under VoiceOver, so a label of "Dairy, 3 comparisons" leaves the listener unable to tell
+  // whether dairy stands out or is one of the things the engine looked at and found nothing in —
+  // which is the entire point of the Gut Map (spec §52).
+  const accessibilityLabel = `${groupTitle}: ${entry.factor.label}, ${entry.findingCount} ${
     entry.findingCount === 1 ? 'comparison' : 'comparisons'
   }`;
 
