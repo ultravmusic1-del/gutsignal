@@ -3,20 +3,30 @@ import { View } from 'react-native';
 import { Card, Screen, Text } from '@/components/ui';
 import { greetingForHour } from '@/domain/time/greeting';
 import { FirstInsightProgress } from '@/features/insights/FirstInsightProgress';
+import { QuickLogTiles } from '@/features/logs/QuickLogTiles';
 import { TodayEntries } from '@/features/logs/TodayEntries';
+import { useLoggedToday } from '@/features/logs/useLoggedToday';
+import { todayLocalDate } from '@/features/logs/useSymptomLogs';
 import { useTheme } from '@/theme';
 
 /**
  * Today — the daily dashboard (spec §33).
  *
- * Meals and symptoms are real as of Milestone 5 and read from local storage, so the day is
- * correct with no connection. The quick-log tiles and GutSignal Score arrive with the
- * remaining log types and the engine (M8): rendering them now with invented numbers would be
- * exactly the fake-data placeholder the spec forbids.
+ * Everything here reads local storage, so the day is correct with no connection.
+ *
+ * The screen is ordered by how soon it stops being useful. The quick-log tiles are for the person
+ * who opened the app to record something and wants to leave; the day's entries are for the person
+ * checking what they already logged; the progress card is for the person wondering whether any of
+ * this is going anywhere. The explainer last, because it is read once.
+ *
+ * The GutSignal Score is still absent, and stays absent until it means something. A number on this
+ * screen would be the first thing anyone looked at, and it would need to be defensible before it
+ * could be prominent — inventing one now is the fake-data placeholder the spec forbids.
  */
 export default function TodayScreen() {
   const theme = useTheme();
   const greeting = greetingForHour(new Date().getHours());
+  const loggedToday = useLoggedToday(todayLocalDate());
 
   return (
     <Screen scroll floatingNav>
@@ -27,6 +37,10 @@ export default function TodayScreen() {
           </Text>
           <Text variant="title">How&apos;s your gut today?</Text>
         </View>
+
+        {/* One tap to the most likely entry. The floating + still reaches everything; this
+            removes a tap from the common case (spec §33). */}
+        <QuickLogTiles loggedToday={loggedToday} hour={new Date().getHours()} />
 
         <TodayEntries />
 
