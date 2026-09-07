@@ -381,6 +381,23 @@ Default: `later_same_day`.
 > on each finding but does not yet narrow which outcomes count. Day-level comparison is the right
 > default for sparse diary data, but exposure-level windowing is a real refinement and is listed
 > in §14 below.
+>
+> **What it costs, measured (2026-09-07).** The `the arrow runs the other way` fixture holds a
+> diary where every symptom is at 09:00 and the meal beside it at 14:00 — ordering that rules the
+> association out. The engine returns `stronger_recurring_signal` at **confidence 1.0 with no
+> limitations**: the strongest statement the product can make. Two consequences follow, and the
+> note above implied neither:
+>
+> 1. In a gut diary, eating differently _because_ of a symptom is the most ordinary behaviour
+>    there is, so this shape is common rather than adversarial.
+> 2. `findingDetail` shows the user the stored window label — "Later the same day" — for a
+>    comparison actually computed as "same calendar day, in any order". That is a separate
+>    accuracy question from the granularity one, and arguably the more urgent of the two: the
+>    label can be corrected without touching the methodology.
+>
+> Not fixed here. Applying the window changes every finding in the corpus and is a methodology
+> change under `CLAUDE.md` §48, which wants an ADR and the owner's awareness rather than a quiet
+> edit at the end of an improvement run.
 
 ---
 

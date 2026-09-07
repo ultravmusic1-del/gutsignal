@@ -321,6 +321,12 @@ behaviour · native crash behaviour.
       diaries and the findings; judging whether the language is safe and useful to a clinician is
       a human call
 - [ ] Database backups configured, restore procedure tested on staging
+- [ ] **Exposure-level observation windows, or at least an honest window label.** The engine
+      compares whole days; the window stored on a finding does not narrow which outcomes count.
+      Measured cost: a diary whose ordering rules an association out still returns the strongest
+      status at confidence 1.0 with no limitations, and the detail screen shows it a window label
+      it was not computed with. Fixing the label is small; applying the window is a methodology
+      change needing an ADR. See docs/PATTERN_ENGINE.md §11.
 - [ ] **Should a just-deleted account emit an analytics event?** `account_deleted` is declared and
       uncalled. Deletion has worked since ADR-0042, so this is no longer a wiring gap: it is a
       question of whether telemetry should outlive an erasure request. Either answer is

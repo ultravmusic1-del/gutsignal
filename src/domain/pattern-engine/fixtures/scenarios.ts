@@ -544,6 +544,61 @@ const simultaneousDietChange: Scenario = {
   expect: { hasConfounder: true },
 };
 
+// --- 21. The arrow runs the other way --------------------------------------
+
+/**
+ * Reverse causation, which in a gut diary is not an edge case but a habit.
+ *
+ * People eat blandly *because* they already feel unwell. Rice, toast and plain chicken cluster
+ * on symptom days for exactly that reason, and a diary records the meal and the symptom on the
+ * same day without recording which came first. The engine sees rice and bloating together and
+ * reports an association — which is, strictly, true and exactly what it claims to report.
+ *
+ * Nothing in a diary distinguishes "the food caused this" from "this caused the food", and §17
+ * forbidding causal language is the product's answer to that.
+ *
+ * What this fixture adds is the **measured cost** of a limitation `PATTERN_ENGINE.md` §11 already
+ * records: comparison is at whole-day granularity, and the observation window is stored on a
+ * finding without narrowing which outcomes count. The symptom here is at 09:00 and the meal at
+ * 14:00, so the food cannot have preceded the symptom beside it — and the engine returns
+ * `stronger_recurring_signal` at confidence **1.0, with no limitations**. That is the strongest
+ * statement the product can make, on a diary whose ordering rules the association out.
+ *
+ * The documented limitation says day-level comparison is "the right default for sparse diary
+ * data", which is defensible. It does not say the default costs nothing, and this is what it
+ * costs — in a gut diary, where eating differently *because* of a symptom is the most ordinary
+ * behaviour there is.
+ *
+ * The expectation below pins today's answer, not a desired one. Applying the window will fail this
+ * fixture, which is the point: the change should be visible rather than silent.
+ */
+const reverseCausation: Scenario = {
+  name: 'the arrow runs the other way',
+  why: 'People eat blandly because they feel unwell, so bland food clusters on symptom days. The engine cannot tell that apart from food causing symptoms, and the honest response is association language rather than a claim it cannot support.',
+  logs: (() => {
+    // Symptom days come first, chosen independently of any food.
+    const symptomDays = LONG.filter((_, i) => i % 3 === 0);
+    const goodDays = LONG.filter((_, i) => i % 3 !== 0);
+
+    return mergeLogs(
+      // The order is the whole fixture: the symptom is at nine in the morning and the meal at
+      // two in the afternoon, so the food cannot have preceded the symptom sitting beside it.
+      { symptoms: symptomDays.map((date) => makeSymptom(date, { hour: 9 })) },
+      {
+        meals: symptomDays
+          .filter((_, i) => i % 10 !== 0)
+          .map((date) => makeMeal(date, { tags: ['spicy'], hour: 14 })),
+      },
+      { wellbeing: goodDays.map((date) => makeWellbeing(date)) }
+    );
+  })(),
+  range: RANGE,
+  factorKey: 'spicy',
+  outcome: BLOATING,
+  // Current behaviour, pinned so that fixing the window is visible rather than silent.
+  expect: { status: ['stronger_recurring_signal'] },
+};
+
 export const SCENARIOS: Scenario[] = [
   obvious,
   noAssociation,
@@ -565,6 +620,7 @@ export const SCENARIOS: Scenario[] = [
   noControlGroup,
   contextFactor,
   tooShort,
+  reverseCausation,
 ];
 
 // --- Paired scenarios, which need two runs to mean anything ----------------
