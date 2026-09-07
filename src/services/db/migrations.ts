@@ -317,6 +317,27 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 7,
+    name: 'user_milestones',
+    sql: `
+      -- Things that happen once per user and must not be reported twice.
+      --
+      -- Local only, and deliberately not in the outbox: this records that an event was *sent*,
+      -- which is a property of this install rather than of the account. Syncing it would let a
+      -- second device suppress a milestone it never reported.
+      --
+      -- It holds no health information. A milestone key is a fixed string from the app own
+      -- vocabulary, and the timestamp is when the app noticed, not anything about the person.
+      CREATE TABLE IF NOT EXISTS user_milestones (
+        user_id    TEXT NOT NULL,
+        milestone  TEXT NOT NULL,
+        reached_at TEXT NOT NULL,
+
+        PRIMARY KEY (user_id, milestone)
+      );
+    `,
+  },
 ];
 
 /** Migrations that still need to run, in order. Pure — the unit under test. */

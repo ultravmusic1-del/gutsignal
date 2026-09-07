@@ -90,6 +90,23 @@ export const ANALYTICS_EVENT_SCHEMAS = {
   pattern_detail_opened: noProperties,
   pattern_calculation_expanded: noProperties,
 
+  /**
+   * The diary crossed from "nothing to compare" to "something to show", for this user, once.
+   *
+   * This is the moment §33 says a paywall may eventually attach to — after the user understands
+   * the app, not before — and the free/premium boundary is the owner's decision. What can be built
+   * before that decision is the evidence for it: how many users reach this at all, and how long it
+   * takes them. Choosing a boundary without that is guesswork with a price on it.
+   *
+   * Property-free, and that is not squeamishness. `daysToFirstInsight` would be a number about one
+   * person's health record; even bucketed it describes how sick someone's diary looked. The count
+   * of users reaching the event answers the product question on its own (§29).
+   *
+   * Emitted once per user, by `useFirstInsightMilestone`, which records that it fired in local
+   * storage — an event sent on every launch would make the funnel meaningless.
+   */
+  first_insight_available: noProperties,
+
   // --- Operational ---
   // Failure reasons are a fixed vocabulary, never an error message: messages interpolate.
   sync_failed: z.object({ reason: z.enum(['network', 'auth', 'conflict', 'unknown']) }).strict(),

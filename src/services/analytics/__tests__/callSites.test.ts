@@ -48,7 +48,14 @@ const appSource = () =>
  * justified in writing rather than quietly added.
  */
 const NOT_YET_CALLED: Record<string, string> = {
-  account_deleted: 'Account deletion is not built — the server cascade needs the paused database.',
+  // The reason this entry used to give — "account deletion is not built" — stopped being true at
+  // ADR-0042. It is still uncalled, but now by omission rather than by design, and the question is
+  // no longer a technical one: whether an account that has just been erased should emit telemetry
+  // at all is a privacy call for the owner, not a wiring gap for an agent to close quietly.
+  // Deciding it either way is fine; leaving a false reason in an allowlist is not (§47).
+  account_deleted:
+    'Deletion is built (ADR-0042). Whether a just-deleted account should emit an event is an ' +
+    'open privacy decision for the owner — see docs/PROJECT_STATUS.md §5.',
 };
 
 describe('analytics call sites', () => {

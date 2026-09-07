@@ -321,6 +321,10 @@ behaviour · native crash behaviour.
       diaries and the findings; judging whether the language is safe and useful to a clinician is
       a human call
 - [ ] Database backups configured, restore procedure tested on staging
+- [ ] **Should a just-deleted account emit an analytics event?** `account_deleted` is declared and
+      uncalled. Deletion has worked since ADR-0042, so this is no longer a wiring gap: it is a
+      question of whether telemetry should outlive an erasure request. Either answer is
+      defensible and neither is mine to pick.
 
 ---
 

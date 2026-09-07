@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Button, Card, Text } from '@/components/ui';
 import { firstInsightProgress, type FirstInsightAction } from '@/domain/patterns/progress';
+import { useFirstInsightMilestone } from '@/features/insights/useFirstInsightMilestone';
 import { useInsights } from '@/features/insights/useInsights';
 import { useTheme } from '@/theme';
 
@@ -36,6 +37,10 @@ export function FirstInsightProgress() {
   const theme = useTheme();
   const router = useRouter();
   const insights = useInsights();
+
+  // Before the early return, because hooks run unconditionally — and because the crossing is
+  // worth recording whether or not this particular card gets to render it.
+  useFirstInsightMilestone(insights.isSuccess && insights.data.readiness.kind === 'ready');
 
   // No skeleton and no error state on purpose: this card is not what the user came for, and a
   // failure to compute it is already reported by the Insights screen itself.
