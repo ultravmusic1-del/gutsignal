@@ -70,6 +70,23 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: false,
   },
 
+  /**
+   * Web exists for looking at the UI, not for shipping.
+   *
+   * GutSignal is an iOS app. The web target is a development surface — a place to render screens
+   * and components in a browser so layout, spacing, typography and states can be inspected and
+   * iterated on without a device in hand. It is never built for production, and several native
+   * capabilities are deliberately stubbed there (see `docs/UI_DEVELOPMENT_WORKFLOW.md`).
+   *
+   * `output: 'single'` keeps it a plain client-rendered SPA. Static export would prerender every
+   * route at build time, which for an app whose first screen reads a local database is a lot of
+   * machinery in exchange for nothing this surface needs.
+   */
+  web: {
+    bundler: 'metro',
+    output: 'single',
+  },
+
   plugins: [
     'expo-router',
     [

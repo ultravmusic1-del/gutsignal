@@ -44,14 +44,10 @@ export default function TodayScreen() {
 
         <TodayEntries />
 
-        {/* Where this diary has got to, and the single most useful next thing. Replaces nothing —
-            it sits above the explainer, which stays for the people who have not read it yet. */}
-        <View style={{ gap: theme.spacing.sm }}>
-          <Text variant="overline" color="secondary">
-            WHAT THIS IS BUILDING
-          </Text>
-          <FirstInsightProgress />
-        </View>
+        {/* Where this diary has got to, and the single most useful next thing. The heading lives
+            inside the component: this section renders nothing at all while the engine is still
+            working, and a heading with nothing under it is worse than no heading. */}
+        <FirstInsightProgress />
 
         <View style={{ gap: theme.spacing.sm }}>
           <Text variant="overline" color="secondary">

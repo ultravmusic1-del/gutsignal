@@ -54,48 +54,54 @@ export function FirstInsightProgress() {
   const action = ACTION[progress.action];
 
   return (
-    <Card>
-      <View style={{ gap: theme.spacing.sm }}>
-        <View style={{ gap: theme.spacing.xxs }}>
-          <Text variant="cardTitle">{progress.title}</Text>
-          <Text variant="body" color="secondary">
-            {progress.body}
-          </Text>
-        </View>
+    <View style={{ gap: theme.spacing.sm }}>
+      <Text variant="overline" color="secondary">
+        WHAT THIS IS BUILDING
+      </Text>
 
-        {progress.ready ? null : (
+      <Card>
+        <View style={{ gap: theme.spacing.sm }}>
           <View style={{ gap: theme.spacing.xxs }}>
-            {progress.steps.map((step) => (
-              <View
-                key={step.key}
-                accessible
-                // Read as one thing, and the state is in the words rather than only in the mark —
-                // §36 forbids colour or a glyph being the only signal.
-                accessibilityLabel={`${step.label}: ${step.detail}. ${step.done ? 'Done' : 'Not yet'}`}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}
-              >
-                <Text variant="caption" color={step.done ? 'positive' : 'tertiary'}>
-                  {step.done ? '✓' : '○'}
-                </Text>
-                <Text variant="caption" color="secondary" style={{ flex: 1 }}>
-                  {step.label}
-                </Text>
-                <Text variant="caption" color="tertiary">
-                  {step.detail}
-                </Text>
-              </View>
-            ))}
+            <Text variant="cardTitle">{progress.title}</Text>
+            <Text variant="body" color="secondary">
+              {progress.body}
+            </Text>
           </View>
-        )}
 
-        <Button
-          label={action.label}
-          variant={progress.ready ? 'primary' : 'secondary'}
-          size="medium"
-          haptic={false}
-          onPress={() => router.push(action.route as '/log')}
-        />
-      </View>
-    </Card>
+          {progress.ready ? null : (
+            <View style={{ gap: theme.spacing.xxs }}>
+              {progress.steps.map((step) => (
+                <View
+                  key={step.key}
+                  accessible
+                  // Read as one thing, and the state is in the words rather than only in the mark —
+                  // §36 forbids colour or a glyph being the only signal.
+                  accessibilityLabel={`${step.label}: ${step.detail}. ${step.done ? 'Done' : 'Not yet'}`}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}
+                >
+                  <Text variant="caption" color={step.done ? 'positive' : 'tertiary'}>
+                    {step.done ? '✓' : '○'}
+                  </Text>
+                  <Text variant="caption" color="secondary" style={{ flex: 1 }}>
+                    {step.label}
+                  </Text>
+                  <Text variant="caption" color="tertiary">
+                    {step.detail}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <Button
+            label={action.label}
+            variant={progress.ready ? 'primary' : 'secondary'}
+            size="medium"
+            haptic={false}
+            onPress={() => router.push(action.route as '/log')}
+          />
+        </View>
+      </Card>
+    </View>
   );
 }

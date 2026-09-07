@@ -1655,3 +1655,62 @@ The product succeeds only if users can trust that:
 When choosing between a clever implementation and a simple, reliable, testable one:
 
 choose the simple, reliable, testable implementation.
+
+## 62. UI / UX VISUAL VERIFICATION WORKFLOW
+
+Appended after §61 rather than inserted, so every `§N` reference already written into the code and
+docs keeps pointing at the same thing.
+
+There is a browser-based visual surface for this project. Use it.
+
+### The rule
+
+**Never claim a UI implementation looks good unless you have actually inspected the rendered
+result.** TypeScript compiling, tests passing and a clean lint say nothing whatsoever about whether
+a screen looks right. When the visual tooling is available and you skip it, you are guessing — and
+saying "this should look good now" is the same failure as claiming a test passes without running
+it (§45).
+
+If the tooling is genuinely unavailable in a session, say so plainly rather than substituting
+confidence for evidence.
+
+### For any task that materially changes UI or UX
+
+1. **Read first.** Open the component and the design tokens it uses before editing. GutSignal has
+   a token system (§35); a change that introduces a raw colour or spacing value is wrong before it
+   is ugly.
+2. **Implement the change.**
+3. **Render it.** Storybook for an isolated reusable component, Expo Web for a whole screen in its
+   navigation context.
+4. **Look at it** through the browser tooling — screenshot, read the accessibility tree, read the
+   console.
+5. **Inspect at the mobile viewport at minimum**: 393 × 852.
+6. **For anything responsive**, also check 430 × 932. 820 × 1180 is available but iPad is not a
+   supported target (`supportsTablet: false`) — treat it as information, not as a requirement.
+7. **Check the console every time.** A React warning about an unrecognised prop, or a failed
+   image, is a real defect that a screenshot alone will not show you.
+8. **Critique what you see**, specifically: broken hierarchy · poor spacing · misalignment · text
+   wrapping · clipping · overflow · inconsistent radii · inconsistent typography · weak contrast ·
+   inappropriate whitespace · touch targets below 44pt · visual inconsistency between related
+   components · and the loading, empty and error states, which are part of done (§57).
+9. **Iterate autonomously.** Render → inspect → edit → render again, until it is genuinely good.
+   Do not stop at the first version that renders without crashing.
+10. **Check both colour schemes** where the component appears in both. Storybook has a scheme
+    toggle for exactly this.
+
+### Which surface for which job
+
+| Job                                           | Surface                                    |
+| --------------------------------------------- | ------------------------------------------ |
+| One reusable component, its states, variants  | Storybook (`npm run storybook:web`)        |
+| A whole screen, navigation, real data flow    | Expo Web (`npm run web`)                   |
+| Do the primitives still look like one product | `/dev/ui` gallery, development builds only |
+| Anything native                               | A physical iPhone. Nothing else counts.    |
+
+### What web cannot tell you
+
+Web is a design surface, not a simulator. Native iOS remains the source of truth for native
+behaviour: sheets and detents, haptics, Sign in with Apple, the Keychain, notifications, HealthKit,
+gesture and Reanimated edge cases, and real performance. `docs/UI_DEVELOPMENT_WORKFLOW.md` lists
+the specific known differences. A layout verified on web still needs a device pass before anything
+depending on those is called done.

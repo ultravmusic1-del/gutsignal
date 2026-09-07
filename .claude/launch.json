@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gutsignal-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8082"],
+      "port": 8082
+    },
+    {
+      "name": "gutsignal-storybook-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "storybook:web"],
+      "port": 6006
+    }
+  ]
+}

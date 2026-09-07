@@ -6,8 +6,12 @@
   "scripts": {
     "start": "expo start --dev-client",
     "start:go": "expo start",
+    "ios": "expo start --ios",
     "android": "expo start --android",
-    "web": "expo start --web",
+    "web": "expo start --web --port 8082",
+    "storybook:open": "storybook dev -p 6006",
+    "storybook:web": "storybook dev -p 6006 --no-open",
+    "storybook:build": "storybook build -o storybook-static",
     "lint": "expo lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -23,6 +27,7 @@
     "report:sample": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/sample-report.mjs"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~57.0.15",
     "@hookform/resolvers": "^5.9.1",
     "@supabase/supabase-js": "^2.112.3",
     "@tanstack/react-query": "^5.102.2",
@@ -56,11 +61,14 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2",
     "react-native-worklets": "0.10.1",
     "zod": "^4.4.3",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/react-native-web-vite": "^10.6.0",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^26.2.0",
@@ -70,8 +78,10 @@
     "jest": "^29.7.0",
     "jest-expo": "~57.0.5",
     "prettier": "^3.9.6",
+    "storybook": "^10.6.0",
     "test-renderer": "^1.2.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vite": "^7.3.6"
   },
   "jest": {
     "preset": "jest-expo",
@@ -83,11 +93,13 @@
     },
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
-      "!src/**/*.d.ts"
+      "!src/**/*.d.ts",
+      "!src/**/*.stories.tsx"
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/.expo/"
+      "/.expo/",
+      "/storybook-static/"
     ],
     "coverageThreshold": {
       "src/domain/pattern-engine/": {

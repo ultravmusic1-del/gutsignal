@@ -1,5 +1,3 @@
-import * as SecureStore from 'expo-secure-store';
-
 /**
  * Session storage for Supabase Auth, backed by the iOS Keychain / Android Keystore.
  *
@@ -10,6 +8,8 @@ import * as SecureStore from 'expo-secure-store';
  * The chunking is pure string manipulation and is unit-tested against an in-memory store —
  * losing a session silently would log the user out and, worse, could look like data loss.
  */
+
+import { secureStore } from './secureStore';
 
 const CHUNK_SIZE = 1536;
 const INDEX_SUFFIX = '__chunks';
@@ -87,8 +87,11 @@ export function createChunkedStorage(store: SecureStoreLike) {
   };
 }
 
-export const secureStorageAdapter = createChunkedStorage({
-  getItemAsync: SecureStore.getItemAsync,
-  setItemAsync: (key, value) => SecureStore.setItemAsync(key, value),
-  deleteItemAsync: SecureStore.deleteItemAsync,
-});
+/**
+ * The adapter the Supabase client uses.
+ *
+ * The backing store is imported rather than constructed here, so the web development surface can
+ * swap it (`secureStore.web.ts`) without touching the chunking logic — which is the part with the
+ * tests and the part that must behave identically everywhere.
+ */
+export const secureStorageAdapter = createChunkedStorage(secureStore);

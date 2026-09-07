@@ -153,6 +153,16 @@ export default function RootLayout() {
                         headerBackTitle: 'You',
                       }}
                     />
+                    {/* The design-system gallery. Registered like any other route — the screen
+                    itself redirects out in a release build, because Expo Router discovers routes
+                    from the filesystem and there is no way to unpublish one. */}
+                    <Stack.Screen
+                      name="dev/ui"
+                      options={{
+                        headerShown: true,
+                        headerTitle: 'UI gallery',
+                      }}
+                    />
                     {/* Where the weekly reminder lands. Pushed with a real header, because it is
                     often the first screen of a cold launch and needs a way back. */}
                     <Stack.Screen
