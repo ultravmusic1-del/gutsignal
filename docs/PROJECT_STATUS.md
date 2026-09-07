@@ -1,6 +1,6 @@
 # GutSignal — Project Status & Hardening Plan
 
-**Updated:** 2026-09-06 · **Branch:** `main` @ `3b60aec` · **Source of truth for project state.**
+**Updated:** 2026-09-07 · **Branch:** `main` @ `5324d54` · **Source of truth for project state.**
 
 This file exists because status was drifting across `README.md`, `HANDOFF.md` and
 `PROJECT_PLAN.md`, and stale status is worse here than on an ordinary team: it actively directs
@@ -10,14 +10,14 @@ coding agents. When state changes, change it **here** and let the others link to
 
 ## 1. Verified state, right now
 
-Everything below was run on 2026-09-06, not inferred.
+Everything below was run on 2026-09-07, not inferred.
 
 | Check                              | Result                                          |
 | ---------------------------------- | ----------------------------------------------- |
 | `npm run verify:full`              | green end to end — the same commands CI runs    |
-| `npm test`                         | **1286 tests, 79 suites** — pass                |
+| `npm test`                         | **1479 tests, 89 suites** — pass                |
 | `npx expo-doctor`                  | **21/21**                                       |
-| `npm run export:ios`               | bundles, **including Hermes bytecode** (5.9 MB) |
+| `npm run export:ios`               | bundles, **including Hermes bytecode** (6.1 MB) |
 | RLS isolation suite (live project) | **67 assertions** pass, no leftover rows        |
 | Supabase security advisor          | no lints                                        |
 | `npm audit --audit-level=high`     | passes — 14 moderate, 0 high/critical           |
@@ -379,3 +379,44 @@ says iOS is blocking them rather than pretending to work.
 schedule registered with one phone's OS, but it means a second device starts from the defaults. If
 that becomes wrong, the fix is a `notification_preferences` column on `user_preferences` and a
 last-writer-wins merge — not the outbox, which carries health records.
+
+---
+
+## 9. Improvement queue, 2026-09-07
+
+Twelve items, worked in value order. Each shipped as one verified commit; the two that were not
+implemented are recorded here because _why not_ is the useful part.
+
+| #   | Item                 | Outcome                                                              |
+| --- | -------------------- | -------------------------------------------------------------------- |
+| 1   | Weekly review        | Built. The M14 reminder was promising a screen that did not exist    |
+| 2   | Empty/loading/error  | Found a data-loss bug instead — see below                            |
+| 3   | First-run value      | Progress card on Today, sharing the Insights cache                   |
+| 4   | Quick-log tiles      | One tap to the likeliest entry, ordered by clock and by today        |
+| 5   | Timeline performance | Repository measured fine; the defect was prop identity on Today      |
+| 6   | Query cache          | Local reads no longer inherit `retry: 2` from the server defaults    |
+| 7   | Duplicate guard      | A good day cannot be recorded twice; the tile opens the existing one |
+| 8   | Chart accessibility  | Evidence and caveats were sighted-only — see below                   |
+| 9   | Conversion           | Paywall blocked on your decision; built the evidence for it          |
+| 10  | Onboarding resume    | **Declined** — contradicts a documented §28 position                 |
+| 11  | Engine fixtures      | Corpus already complete; added the shape it lacked — see below       |
+| 12  | Sync status          | The failure reason reached analytics and not the user                |
+
+### The three findings worth your attention
+
+**An edit form could overwrite a real entry with defaults.** All five log sheets doubled as edit
+screens and none checked whether the entry had loaded, so an edit opened over a slow or failed
+read rendered defaults with the real id attached. Saving wrote them. Silent, irreversible, and
+indistinguishable from the user having done it. Fixed, gated, and guarded against the sixth screen.
+
+**VoiceOver users heard findings without their evidence.** `FindingCard` is one accessibility
+element, so its label replaced the card's contents — and the label carried the status and headline
+only. The counts and the limitations, both on the card _specifically_ so a claim never travels
+without its caveat, reached sighted users alone. That is §36 failing as a safety rule.
+
+**Whole-day comparison costs more than §11 admitted.** A fixture where every symptom is at 09:00
+and the meal beside it at 14:00 — ordering that rules the association out — still returns
+`stronger_recurring_signal` at confidence 1.0 with no limitations. The limitation was already
+documented; the cost was not. Two separable questions now on your list: applying the window is a
+methodology change needing an ADR, but the detail screen showing users a window label the
+comparison never used is a smaller, independent fix.
