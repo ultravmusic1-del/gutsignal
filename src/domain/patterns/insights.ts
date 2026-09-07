@@ -106,12 +106,35 @@ export type InsightsReadiness =
   | { kind: 'needs_more_variety' }
   | { kind: 'looked_and_found_nothing'; comparisons: number };
 
+/**
+ * Distinct local days of each kind in a diary.
+ *
+ * Days rather than entries throughout: three meals on one day is one day of tracking, and every
+ * threshold in the engine is expressed in days. Shared by `assessReadiness` and by the progress
+ * card on Today, so the two cannot disagree about how far along a diary is.
+ */
+export type TrackingCounts = {
+  daysLogged: number;
+  goodDays: number;
+  symptomDays: number;
+};
+
+const distinctDays = (dates: string[]): number => new Set(dates).size;
+
+export function trackingCounts(logs: LogSet): TrackingCounts {
+  return {
+    daysLogged: distinctDays(
+      [...logs.meals, ...logs.symptoms, ...logs.bowel, ...logs.wellbeing, ...logs.context].map(
+        (log) => log.occurredLocalDate
+      )
+    ),
+    goodDays: distinctDays(logs.wellbeing.map((log) => log.occurredLocalDate)),
+    symptomDays: distinctDays(logs.symptoms.map((log) => log.occurredLocalDate)),
+  };
+}
+
 export function assessReadiness(logs: LogSet, findings: Finding[]): InsightsReadiness {
-  const loggedDays = new Set(
-    [...logs.meals, ...logs.symptoms, ...logs.bowel, ...logs.wellbeing, ...logs.context].map(
-      (log) => log.occurredLocalDate
-    )
-  );
+  const counts = trackingCounts(logs);
 
   // Checked before the empty-diary guard on purpose. A finding can only exist if logs did, so
   // if there is something to show, showing it always beats explaining why there is not.
@@ -120,22 +143,19 @@ export function assessReadiness(logs: LogSet, findings: Finding[]): InsightsRead
   );
   if (hasSomethingToShow) return { kind: 'ready' };
 
-  if (loggedDays.size === 0) return { kind: 'no_logs' };
-
-  const daysWithSymptom = new Set(logs.symptoms.map((log) => log.occurredLocalDate)).size;
-  const daysWithGoodState = new Set(logs.wellbeing.map((log) => log.occurredLocalDate)).size;
+  if (counts.daysLogged === 0) return { kind: 'no_logs' };
 
   // The most common and least guessable blocker. Without an explicit good day there is no
   // control group, so the engine has nothing to compare a symptom day against — however
   // diligently everything else has been recorded.
-  if (daysWithSymptom > 0 && daysWithGoodState === 0) {
-    return { kind: 'needs_good_days', daysWithSymptom };
+  if (counts.symptomDays > 0 && counts.goodDays === 0) {
+    return { kind: 'needs_good_days', daysWithSymptom: counts.symptomDays };
   }
 
-  if (loggedDays.size < MINIMUM_USEFUL_DAYS) {
+  if (counts.daysLogged < MINIMUM_USEFUL_DAYS) {
     return {
       kind: 'needs_more_days',
-      daysLogged: loggedDays.size,
+      daysLogged: counts.daysLogged,
       daysNeeded: MINIMUM_USEFUL_DAYS,
     };
   }
@@ -221,6 +241,8 @@ export type Insights = {
   trends: TrendSeries[];
   summary: InsightsSummary;
   readiness: InsightsReadiness;
+  /** How much diary there is, in days. Feeds the progress card on Today. */
+  tracking: TrackingCounts;
 };
 
 /**
@@ -256,5 +278,6 @@ export function buildInsights({
     trends: buildTrends({ logs, range }),
     summary: summarise(findings),
     readiness: assessReadiness(logs, findings),
+    tracking: trackingCounts(logs),
   };
 }

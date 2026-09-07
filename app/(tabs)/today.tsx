@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import { Card, Screen, Text } from '@/components/ui';
 import { greetingForHour } from '@/domain/time/greeting';
+import { FirstInsightProgress } from '@/features/insights/FirstInsightProgress';
 import { TodayEntries } from '@/features/logs/TodayEntries';
 import { useTheme } from '@/theme';
 
@@ -28,6 +29,15 @@ export default function TodayScreen() {
         </View>
 
         <TodayEntries />
+
+        {/* Where this diary has got to, and the single most useful next thing. Replaces nothing —
+            it sits above the explainer, which stays for the people who have not read it yet. */}
+        <View style={{ gap: theme.spacing.sm }}>
+          <Text variant="overline" color="secondary">
+            WHAT THIS IS BUILDING
+          </Text>
+          <FirstInsightProgress />
+        </View>
 
         <View style={{ gap: theme.spacing.sm }}>
           <Text variant="overline" color="secondary">
