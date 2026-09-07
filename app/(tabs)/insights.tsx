@@ -83,7 +83,11 @@ export default function InsightsScreen() {
     </View>
   );
 
-  if (insights.isPending) {
+  // `isLoading` means "fetching for the first time". A query that is disabled — no session yet —
+  // is neither loading nor loaded, so `data` can be undefined here without anything being wrong.
+  // In the app that is unreachable, because the boot gate resolves a session before this screen
+  // exists; on the web development surface it happens whenever a URL is opened directly.
+  if (insights.isLoading || insights.data === undefined) {
     return (
       <Screen scroll floatingNav>
         <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xl }}>

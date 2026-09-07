@@ -117,7 +117,7 @@ export function useNotificationSettings() {
 
   return {
     preferences: current,
-    isLoading: preferences.isPending,
+    isLoading: preferences.isLoading,
     permission: permission.data ?? 'undetermined',
     isPermissionLoading: permission.isPending,
     plan,

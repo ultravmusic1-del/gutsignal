@@ -78,7 +78,7 @@ export function TodayEntries() {
 
   const sources = [meals, symptoms, bowel, wellbeing, context];
 
-  if (sources.some((source) => source.isPending)) {
+  if (sources.some((source) => source.isLoading)) {
     return (
       <Card>
         <Text variant="body" color="secondary">

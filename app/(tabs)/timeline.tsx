@@ -123,7 +123,7 @@ export default function TimelineScreen() {
     </View>
   );
 
-  const emptyState = timeline.isPending ? (
+  const emptyState = timeline.isLoading ? (
     <View style={{ paddingHorizontal: theme.spacing.gutter, paddingTop: theme.spacing.xl }}>
       <Text variant="body" color="secondary">
         Loading your diary…

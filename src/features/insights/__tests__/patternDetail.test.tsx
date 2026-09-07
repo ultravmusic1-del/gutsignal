@@ -26,19 +26,24 @@ jest.mock('expo-router', () => ({
   useFocusEffect: () => {},
 }));
 
+/**
+ * Modelled on the real hook, including the part that matters here: while a query is loading it
+ * has no `data` at all. A mock that reported `isLoading` and handed back populated `data` anyway
+ * would let the screen read from something no real loading state ever provides.
+ */
 const insightsState: {
-  isPending: boolean;
+  isLoading: boolean;
   isError: boolean;
   isSuccess: boolean;
   findings: Finding[];
-} = { isPending: false, isError: false, isSuccess: true, findings: [] };
+} = { isLoading: false, isError: false, isSuccess: true, findings: [] };
 
 jest.mock('@/features/insights/useInsights', () => ({
   useInsights: () => ({
-    isPending: insightsState.isPending,
+    isLoading: insightsState.isLoading,
     isError: insightsState.isError,
     isSuccess: insightsState.isSuccess,
-    data: { findings: insightsState.findings },
+    data: insightsState.isLoading ? undefined : { findings: insightsState.findings },
   }),
 }));
 
@@ -95,7 +100,7 @@ function aFinding(overrides: Partial<Finding> = {}): Finding {
 }
 
 function showing(findings: Finding[], id: string) {
-  insightsState.isPending = false;
+  insightsState.isLoading = false;
   insightsState.isError = false;
   insightsState.isSuccess = true;
   insightsState.findings = findings;
@@ -197,7 +202,7 @@ describe('PatternDetailScreen', () => {
 
   it('says it is working rather than showing an empty page while loading', async () => {
     showing([], 'anything');
-    insightsState.isPending = true;
+    insightsState.isLoading = true;
     insightsState.isSuccess = false;
 
     await renderWithTheme();

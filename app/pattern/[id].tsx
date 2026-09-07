@@ -45,7 +45,8 @@ export default function PatternDetailScreen() {
   // the user got to look at.
   useScreenView('pattern_detail_opened', finding === null ? null : {});
 
-  if (insights.isPending) {
+  // See the note in insights.tsx: a disabled query is neither loading nor loaded.
+  if (insights.isLoading || insights.data === undefined) {
     return (
       <Screen scroll topInset={false}>
         <View style={{ paddingTop: theme.spacing.xl }}>

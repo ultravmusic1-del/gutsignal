@@ -29,7 +29,7 @@ export default function WeeklyReviewScreen() {
   const theme = useTheme();
   const review = useWeeklyReview();
 
-  if (review.isPending) {
+  if (review.isLoading) {
     return (
       <Screen>
         <View style={{ paddingTop: theme.spacing.xxl }}>
