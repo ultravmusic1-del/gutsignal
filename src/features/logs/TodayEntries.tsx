@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
@@ -59,6 +59,23 @@ export function TodayEntries() {
     [deleteEntry]
   );
 
+  // Memoized because `TimelineEntryRow` is `memo`'d and compares props by identity. Built inline,
+  // every entry object was new on every render, so the memo never held and the whole day
+  // re-rendered whenever anything else on Today changed — which is now more often, since Today
+  // gained the quick-log tiles and the progress card. The Timeline does the same thing for the
+  // same reason; this was the copy that did not.
+  const entries: LogEntry[] = useMemo(
+    () =>
+      [
+        ...(meals.data ?? []).map((meal) => mealEntry(meal, meal.syncPending)),
+        ...(symptoms.data ?? []).map((log) => symptomEntry(log, log.syncPending)),
+        ...(bowel.data ?? []).map((log) => bowelEntry(log, log.syncPending)),
+        ...(wellbeing.data ?? []).map((log) => wellbeingEntry(log, log.syncPending)),
+        ...(context.data ?? []).map((log) => contextEntry(log, log.syncPending)),
+      ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)),
+    [meals.data, symptoms.data, bowel.data, wellbeing.data, context.data]
+  );
+
   const sources = [meals, symptoms, bowel, wellbeing, context];
 
   if (sources.some((source) => source.isPending)) {
@@ -83,14 +100,6 @@ export function TodayEntries() {
       </Card>
     );
   }
-
-  const entries: LogEntry[] = [
-    ...(meals.data ?? []).map((meal) => mealEntry(meal, meal.syncPending)),
-    ...(symptoms.data ?? []).map((log) => symptomEntry(log, log.syncPending)),
-    ...(bowel.data ?? []).map((log) => bowelEntry(log, log.syncPending)),
-    ...(wellbeing.data ?? []).map((log) => wellbeingEntry(log, log.syncPending)),
-    ...(context.data ?? []).map((log) => contextEntry(log, log.syncPending)),
-  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
 
   if (entries.length === 0) {
     return (
