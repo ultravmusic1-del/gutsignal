@@ -18,6 +18,7 @@ import { createMealSyncEntity } from '@/services/logs/mealRemote';
 import { createSimpleLogEntities } from '@/services/logs/logEntities';
 import { clearCursors } from '@/services/sync/cursors';
 import { createNetworkMonitor } from '@/services/sync/network';
+import type { SyncFailureReason } from '@/domain/sync/syncStatus';
 import { pendingCount } from '@/services/sync/outbox';
 import { createSyncEngine, type SyncEngine, type SyncResult } from '@/services/sync/syncEngine';
 
@@ -37,10 +38,21 @@ export type SyncState = {
   flush: () => Promise<void>;
   /** Re-reads the pending count. Called after a local write. */
   refresh: () => void;
+  /**
+   * When a run last completed without a failure, and why the most recent one failed.
+   *
+   * Exposed because the user is the person with the most at stake in the answer (§61). The reason
+   * was previously computed, sent to analytics and discarded, so a diary that had quietly stopped
+   * syncing looked exactly like one that was syncing perfectly.
+   */
+  lastSyncedAt: string | null;
+  lastFailure: SyncFailureReason | null;
 };
 
 const SyncContext = createContext<SyncState>({
   pendingCount: 0,
+  lastSyncedAt: null,
+  lastFailure: null,
   syncNow: () => {},
   flush: async () => {},
   refresh: () => {},
@@ -73,6 +85,23 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
   const engineRef = useRef<SyncEngine | null>(null);
   const [pending, setPending] = useState(0);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [lastFailure, setLastFailure] = useState<SyncFailureReason | null>(null);
+
+  /**
+   * Records what a run did, for the user and for analytics.
+   *
+   * A run that returns nothing — no engine yet, or a throw before it started — leaves the last
+   * known state alone rather than clearing it. Reporting 'never synced' because one attempt could
+   * not start would be less true than saying nothing.
+   */
+  const recordResult = useCallback((result: SyncResult | undefined) => {
+    reportFailure(result);
+    if (result === undefined) return;
+
+    setLastFailure(result.failureReason ?? null);
+    if (result.failureReason == null) setLastSyncedAt(new Date().toISOString());
+  }, []);
 
   const refresh = useCallback(() => {
     void (async () => {
@@ -87,7 +116,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const flush = useCallback(async () => {
     try {
-      reportFailure(await engineRef.current?.syncNow());
+      recordResult(await engineRef.current?.syncNow());
     } catch {
       // A failed flush is not an error to report: the caller's next step is to count what is
       // still outstanding, and that count is the same whether the attempt failed or found no
@@ -95,19 +124,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     } finally {
       refresh();
     }
-  }, [refresh]);
+  }, [refresh, recordResult]);
 
   const syncNow = useCallback(() => {
     void (async () => {
       try {
-        reportFailure(await engineRef.current?.syncNow());
+        recordResult(await engineRef.current?.syncNow());
       } catch {
         // Retries and backoff are the engine's job; a failed run is not a UI event.
       } finally {
         refresh();
       }
     })();
-  }, [refresh]);
+  }, [refresh, recordResult]);
 
   useEffect(() => {
     if (userId === null) {
@@ -180,8 +209,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const value = useMemo<SyncState>(
-    () => ({ pendingCount: userId === null ? 0 : pending, syncNow, flush, refresh }),
-    [userId, pending, syncNow, flush, refresh]
+    () => ({
+      pendingCount: userId === null ? 0 : pending,
+      lastSyncedAt,
+      lastFailure,
+      syncNow,
+      flush,
+      refresh,
+    }),
+    [userId, pending, lastSyncedAt, lastFailure, syncNow, flush, refresh]
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

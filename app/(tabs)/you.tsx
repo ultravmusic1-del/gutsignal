@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { planSignOut, signOutPrompt, unknownSignOutPrompt } from '@/features/auth/signOutPlan';
 import { useSync } from '@/features/sync/SyncProvider';
 import { signOut } from '@/services/auth/authService';
+import { SyncStatusCard } from '@/features/sync/SyncStatusCard';
 import { openDatabase } from '@/services/db/database';
 import { pendingSyncCountFor } from '@/services/db/localAccount';
 import { useTheme } from '@/theme';
@@ -18,10 +19,14 @@ const TAPS_FOR_DIAGNOSTICS = 7;
 /**
  * You — profile, settings, reports, subscription, privacy (spec §18).
  *
- * Sign-out has been real since Milestone 3, Privacy & data since Milestone 15, and the version row
- * quietly opens diagnostics. Everything else here is still INFORMATION rather than a control —
- * settings and subscription arrive at their own milestones, and a tappable row leading nowhere is
- * the dead button the spec forbids.
+ * Sign-out has been real since Milestone 3, Privacy & data since Milestone 15, Reminders since
+ * Milestone 14, and the version row quietly opens diagnostics. Subscription is the one section
+ * still absent, and stays absent until it does something: a tappable row leading nowhere is the
+ * dead button the spec forbids.
+ *
+ * Sync status leads the screen. Everything below it — the account, the export, the deletion —
+ * assumes an answer to "has any of this left the device", and until now nothing on the page gave
+ * one (§61).
  */
 export default function YouScreen() {
   const theme = useTheme();
@@ -79,6 +84,10 @@ export default function YouScreen() {
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xl }}>
         <Text variant="title">You</Text>
 
+        {/* Above everything else on this screen: whether the diary has left the device is the
+            question the rest of the page assumes an answer to (spec §61). */}
+        <SyncStatusCard />
+
         <Card>
           <Text variant="overline" color="secondary">
             ACCOUNT
@@ -86,8 +95,11 @@ export default function YouScreen() {
           <View style={{ height: theme.spacing.xs }} />
           <Text variant="cardTitle">{session?.user.email ?? 'Signed in'}</Text>
           <View style={{ height: 2 }} />
+          {/* "Backed up to your account" was a promise this screen could not check. The card at
+              the top of the page now says what is actually known, so this says what is designed
+              rather than asserting an outcome. */}
           <Text variant="body" color="secondary">
-            Your entries are stored on this device and backed up to your account.
+            Your entries are written to this device first, then sent to your account.
           </Text>
           <View style={{ height: theme.spacing.md }} />
           <Button
