@@ -41,11 +41,30 @@ export function QuickLogTiles({ loggedToday, hour }: { loggedToday: LoggedToday;
 
   const actions = quickActions({ hour, loggedToday });
 
+  // The immediate tile changes meaning once the day is recorded, and the label has to change with
+  // it — a control that says it saves straight away and instead opens a screen is worse than one
+  // that never claimed to.
+  const label = (action: QuickAction) => {
+    if (!action.immediate) return action.label;
+    return loggedToday.wellbeing
+      ? 'Feeling good — already recorded today, opens it'
+      : `${action.label} — saves straight away`;
+  };
+
   const onPress = (action: QuickAction) => {
     setError(null);
 
     if (!action.immediate) {
       router.push(ROUTE[action.key as Exclude<QuickActionKey, 'wellbeing'>] as '/log/meal');
+      return;
+    }
+
+    // A good day is a statement about the day, so a second one cannot say anything the first did
+    // not. Rather than saving again or refusing, the tile opens the entry that already exists —
+    // the user can then edit or delete it, which is the only thing they could have meant. Nothing
+    // is discarded, so §15 is untouched.
+    if (loggedToday.wellbeing) {
+      router.push('/log/wellbeing');
       return;
     }
 
@@ -67,9 +86,7 @@ export function QuickLogTiles({ loggedToday, hour }: { loggedToday: LoggedToday;
           <Pressable
             key={action.key}
             accessibilityRole="button"
-            accessibilityLabel={
-              action.immediate ? `${action.label} — saves straight away` : action.label
-            }
+            accessibilityLabel={label(action)}
             accessibilityState={{ busy: action.immediate && logWellbeing.isPending }}
             disabled={action.immediate && logWellbeing.isPending}
             onPress={() => onPress(action)}
