@@ -105,10 +105,18 @@ describe('FindingCard', () => {
   });
 
   // §36: confidence must never be conveyed by colour alone.
+  /**
+   * The words, not the casing.
+   *
+   * §36's requirement is that the status is *stated* rather than encoded in a colour. Asserting
+   * `'EMERGING SIGNAL'` pinned a styling decision as though it were that requirement, and broke
+   * the moment the status moved from an all-caps overline into a pill — which changed nothing
+   * about whether the status is named.
+   */
   it('names the status in words', async () => {
     await renderWithTheme(<FindingCard finding={aFinding({ status: 'emerging' })} />);
 
-    expect(screen.getByText('EMERGING SIGNAL')).toBeTruthy();
+    expect(screen.getByText(/emerging signal/i)).toBeTruthy();
   });
 
   // Limitations shown inline, not behind a tap the user may never make.

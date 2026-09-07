@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { Card, Text } from '@/components/ui';
+import { Card, StatusPill, Text, type StatusTone } from '@/components/ui';
 import { syncStatus } from '@/domain/sync/syncStatus';
 import { useSync } from '@/features/sync/SyncProvider';
 import { useTheme } from '@/theme';
@@ -23,17 +23,19 @@ export function SyncStatusCard() {
 
   const status = syncStatus({ pendingCount, lastSyncedAt, lastFailure, now: new Date() });
 
-  const titleColor = status.tone === 'attention' ? 'caution' : 'primary';
-
   return (
     <Card elevation="flat">
       {/* One element, so VoiceOver reads the state and its explanation together rather than as two
           unrelated fragments. */}
       <View accessible accessibilityLabel={`${status.title}. ${status.detail}`}>
-        <Text variant="cardTitle" color={titleColor}>
-          {status.title}
-        </Text>
-        <View style={{ height: theme.spacing.xxs }} />
+        {/* The state as a pill rather than a card title.
+
+            A title styled in the caution colour was the app raising its voice for something that
+            is usually not a problem at all — entries waiting to upload is the offline design
+            working. A pill is the right size for a state: present, scannable, and not competing
+            with the screen's actual headings. */}
+        <StatusPill label={status.title} tone={TONE[status.tone]} />
+        <View style={{ height: theme.spacing.xs }} />
         <Text variant="caption" color="secondary">
           {status.detail}
         </Text>
@@ -41,3 +43,16 @@ export function SyncStatusCard() {
     </Card>
   );
 }
+
+/**
+ * Sync tone → pill tone.
+ *
+ * `working` is neutral, not caution. The distinction the domain already draws is that only
+ * `attention` is the user's to act on, and colouring "still uploading" as a warning would teach
+ * people that the warning means nothing — which is the whole reason `syncStatus` separates them.
+ */
+const TONE: Record<ReturnType<typeof syncStatus>['tone'], StatusTone> = {
+  settled: 'positive',
+  working: 'neutral',
+  attention: 'caution',
+};

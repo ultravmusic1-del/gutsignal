@@ -1,11 +1,12 @@
 import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 
-import { Button, Card, EmptyState, Screen, Text } from '@/components/ui';
+import { Button, EmptyState, Screen, Text } from '@/components/ui';
 import type { WeeklyReview } from '@/domain/reports/weeklyReview';
 import { encodeFindingId } from '@/domain/patterns/findingDetail';
 import { FindingCard } from '@/features/insights/FindingCard';
 import { useWeeklyReview } from '@/features/reports/useWeeklyReview';
+import { WeeklySummary } from '@/features/reports/WeeklySummary';
 import { useTheme } from '@/theme';
 
 /**
@@ -71,7 +72,7 @@ function Review({ review }: { review: WeeklyReview }) {
           <Text variant="title">{review.week.label}</Text>
         </View>
 
-        {review.depth === 'quiet' ? <QuietWeek /> : <WeekNumbers review={review} />}
+        {review.depth === 'quiet' ? <QuietWeek /> : <WeeklySummary review={review} />}
 
         {review.standsOut.length === 0 ? null : (
           <View style={{ gap: theme.spacing.sm }}>
@@ -126,136 +127,6 @@ function QuietWeek() {
         hint="A few entries are enough for next week's review to have something to say."
       />
       <Button label="Log something" onPress={() => router.push('/log')} />
-    </View>
-  );
-}
-
-function WeekNumbers({ review }: { review: WeeklyReview }) {
-  const theme = useTheme();
-
-  const { tracking, symptomDays } = review;
-
-  return (
-    <View style={{ gap: theme.spacing.md }}>
-      <Card>
-        <Text variant="cardTitle">What you recorded</Text>
-        <View style={{ height: theme.spacing.sm }} />
-
-        <Row label="Days with an entry" value={`${tracking.daysLogged} of ${tracking.totalDays}`} />
-        <Row label="Entries" value={String(tracking.entries)} />
-        <Row label="Days you said how you felt" value={String(tracking.daysReportedOn)} />
-
-        {/*
-          Named, never folded into a rate. §19: absence of a log is not absence of a symptom.
-        */}
-        {tracking.daysWithNothingRecorded > 0 ? (
-          <Row
-            label="Days with nothing recorded"
-            value={String(tracking.daysWithNothingRecorded)}
-            muted
-          />
-        ) : null}
-      </Card>
-
-      <Card>
-        <Text variant="cardTitle">How the week read</Text>
-        <View style={{ height: theme.spacing.sm }} />
-
-        <Row
-          label="Days you recorded a symptom"
-          value={`${symptomDays.thisWeek} of ${tracking.daysReportedOn} reported on`}
-        />
-
-        {review.goodDays > 0 ? (
-          <Row label="Days you recorded feeling good" value={String(review.goodDays)} />
-        ) : null}
-
-        {review.meanWorstSeverity === null ? null : (
-          <Row
-            label="Average worst severity on those days"
-            value={`${review.meanWorstSeverity} of 10`}
-          />
-        )}
-
-        {review.bowelEntries > 0 ? (
-          <Row label="Bowel entries" value={String(review.bowelEntries)} />
-        ) : null}
-
-        <View style={{ height: theme.spacing.sm }} />
-        <Comparison review={review} />
-      </Card>
-
-      {review.depth === 'thin' ? (
-        <Text variant="caption" color="secondary">
-          You said how you felt on {tracking.daysReportedOn}{' '}
-          {tracking.daysReportedOn === 1 ? 'day' : 'days'} this week, so there is not much for the
-          review to go on. Days without an entry are not counted as good days.
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-/**
- * Last week, beside this week — or an honest explanation of why not.
- *
- * The wording is the whole point. "Two fewer days with a symptom recorded" is a fact about the
- * diary. "Two days better" would be a claim about the person, which seven days of self-report
- * cannot support.
- */
-function Comparison({ review }: { review: WeeklyReview }) {
-  const { symptomDays } = review;
-
-  if (!symptomDays.comparable) {
-    return (
-      <Text variant="caption" color="secondary">
-        Last week is not shown beside this one: the two weeks were not tracked closely enough for
-        the difference to mean anything.
-      </Text>
-    );
-  }
-
-  if (symptomDays.change === 0) {
-    return (
-      <Text variant="caption" color="secondary">
-        The same number of days as the week before.
-      </Text>
-    );
-  }
-
-  const size = Math.abs(symptomDays.change);
-  const direction = symptomDays.change < 0 ? 'fewer' : 'more';
-
-  return (
-    <Text variant="caption" color="secondary">
-      {size} {size === 1 ? 'day' : 'days'} {direction} with a symptom recorded than the week before
-      ({symptomDays.lastWeek}).
-    </Text>
-  );
-}
-
-function Row({ label, value, muted = false }: { label: string; value: string; muted?: boolean }) {
-  const theme = useTheme();
-
-  return (
-    <View
-      // One accessibility element, so VoiceOver reads "Entries, 12" rather than two fragments.
-      accessible
-      accessibilityLabel={`${label}: ${value}`}
-      style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: theme.spacing.md,
-        minHeight: 32,
-      }}
-    >
-      <Text variant="body" color={muted ? 'secondary' : 'primary'} style={{ flex: 1 }}>
-        {label}
-      </Text>
-      <Text variant="body" color={muted ? 'secondary' : 'primary'}>
-        {value}
-      </Text>
     </View>
   );
 }

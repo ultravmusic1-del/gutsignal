@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { View } from 'react-native';
 
-import { Button, Card, EmptyState, Screen, Text } from '@/components/ui';
+import { Button, Card, EmptyState, Screen, SectionHeader, Text } from '@/components/ui';
 import type { Finding } from '@/domain/pattern-engine/types';
 import { encodeFindingId } from '@/domain/patterns/findingDetail';
 import { readinessCopy } from '@/domain/patterns/insights';
@@ -131,9 +131,7 @@ export default function InsightsScreen() {
           <>
             {standsOut.length > 0 ? (
               <View style={{ gap: theme.spacing.sm }}>
-                <Text variant="overline" color="secondary">
-                  WHAT STANDS OUT
-                </Text>
+                <SectionHeader overline="Insights" title="What stands out" />
                 {standsOut.map((finding) => (
                   <FindingCard
                     key={encodeFindingId(finding)}
@@ -146,13 +144,11 @@ export default function InsightsScreen() {
 
             {emerging.length > 0 ? (
               <View style={{ gap: theme.spacing.sm }}>
-                <Text variant="overline" color="secondary">
-                  WORTH INVESTIGATING
-                </Text>
-                <Text variant="caption" color="secondary">
-                  Early differences, based on fewer observations. Worth watching rather than acting
-                  on.
-                </Text>
+                <SectionHeader
+                  overline="Insights"
+                  title="Worth investigating"
+                  description="Early differences, based on fewer observations. Worth watching rather than acting on."
+                />
                 {emerging.map((finding) => (
                   <FindingCard
                     key={encodeFindingId(finding)}
@@ -172,9 +168,7 @@ export default function InsightsScreen() {
             is going somewhere is most valuable exactly when there are no findings yet. */}
         {drawableTrends.length > 0 ? (
           <View style={{ gap: theme.spacing.lg }}>
-            <Text variant="overline" color="secondary">
-              TRENDS
-            </Text>
+            <SectionHeader overline="Over time" title="Trends" />
 
             {drawableTrends.map((series) => (
               <TrendChart key={series.key} series={series} />
@@ -187,16 +181,11 @@ export default function InsightsScreen() {
             search in its subtitle, so a finding is read against everything else examined. */}
         {gutMap.length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>
-            <View style={{ gap: theme.spacing.xxs }}>
-              <Text variant="overline" color="secondary">
-                YOUR GUT MAP
-              </Text>
-              <Text variant="caption" color="secondary">
-                Everything GutSignal examined: {summary.factors}{' '}
-                {summary.factors === 1 ? 'thing' : 'things'} you logged, across{' '}
-                {summary.comparisons} {summary.comparisons === 1 ? 'comparison' : 'comparisons'}.
-              </Text>
-            </View>
+            <SectionHeader
+              overline="Everything examined"
+              title="Your gut map"
+              description={`${summary.factors} ${summary.factors === 1 ? 'thing' : 'things'} you logged, across ${summary.comparisons} ${summary.comparisons === 1 ? 'comparison' : 'comparisons'}.`}
+            />
 
             <GutMap groups={gutMap} onSelect={openFinding} />
           </View>

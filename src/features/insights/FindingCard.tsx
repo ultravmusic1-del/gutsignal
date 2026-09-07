@@ -1,10 +1,10 @@
 import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Card, Text } from '@/components/ui';
+import { Card, StatusPill, Text, type StatusTone } from '@/components/ui';
 import { comparisonNumbers, observationSentence } from '@/domain/patterns/findingDetail';
 import { findingSpeech } from '@/domain/patterns/findingSpeech';
-import { PATTERN_STATUS_COPY } from '@/domain/patterns/status';
+import { PATTERN_STATUS_COPY, type PatternStatus } from '@/domain/patterns/status';
 import type { Finding } from '@/domain/pattern-engine/types';
 import { useTheme } from '@/theme';
 
@@ -25,6 +25,24 @@ type Props = {
   onPress?: (finding: Finding) => void;
 };
 
+/**
+ * What the pill's colour marks: **how much evidence there is**, never whether the news is good.
+ *
+ * A finding is not positive or negative. "Symptoms were recorded more often following dairy" is
+ * not bad news any more than its absence is good news, and tinting it red or green would be the
+ * app taking a view on someone's health that §17 forbids it from having.
+ *
+ * So the accent marks the two statuses that rest on enough evidence to lead with, and everything
+ * else is neutral. The word in the pill is what actually distinguishes them.
+ */
+const STATUS_TONE: Record<PatternStatus, StatusTone> = {
+  stronger_recurring_signal: 'accent',
+  moderate: 'accent',
+  emerging: 'neutral',
+  no_clear_pattern: 'neutral',
+  insufficient_data: 'neutral',
+};
+
 function FindingCardComponent({ finding, onPress }: Props) {
   const theme = useTheme();
 
@@ -40,10 +58,12 @@ function FindingCardComponent({ finding, onPress }: Props) {
   const body = (
     <Card>
       <View style={{ gap: theme.spacing.sm }}>
-        <View style={{ gap: 2 }}>
-          <Text variant="overline" color="secondary">
-            {status.label.toUpperCase()}
-          </Text>
+        <View style={{ gap: theme.spacing.xs, alignItems: 'flex-start' }}>
+          {/* A pill rather than an overline. The status is the first thing that qualifies the
+              claim beneath it, and an all-caps line of small text reads as a category label —
+              something to skip past — rather than as a statement about how much to trust what
+              follows. The tone never carries it alone: the word is always there (§36). */}
+          <StatusPill label={status.label} tone={STATUS_TONE[finding.status]} />
           <Text variant="cardTitle">{headline}</Text>
         </View>
 

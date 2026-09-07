@@ -86,6 +86,37 @@ export const typography = {
     fontFamily: family?.rounded,
     maxFontSizeMultiplier: 1.5,
   },
+  /**
+   * A number that is the point of the thing it sits in.
+   *
+   * Lighter and larger than `metric`, because at this size weight reads as shouting and the size
+   * is already doing the emphasis. Tracking is pulled in hard: large type set at default tracking
+   * looks loose, and that looseness is most of what separates a considered number from a
+   * plain one.
+   *
+   * Tabular figures are applied by the `Metric` component rather than declared here, because a
+   * `fontVariant` in a token would apply to any text that borrowed the style.
+   */
+  metricDisplay: {
+    fontSize: 56,
+    lineHeight: 58,
+    fontWeight: '300',
+    letterSpacing: -2,
+    maxFontSizeMultiplier: 1.3,
+  },
+  /**
+   * The unit or suffix beside a number — `%`, `min`, `of 10`.
+   *
+   * Deliberately far smaller than the value and set at the value's own weight, so "78.3%" reads as
+   * one measurement rather than as a number followed by a word.
+   */
+  metricUnit: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '400',
+    letterSpacing: 0,
+    maxFontSizeMultiplier: 1.3,
+  },
   button: {
     fontSize: 17,
     lineHeight: 22,
