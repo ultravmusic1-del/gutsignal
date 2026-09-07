@@ -5,6 +5,7 @@ import { localDateIn, resolveTimeZone } from '@/domain/time/occurrence';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
+import { LOCAL_QUERY_OPTIONS } from '@/services/query/localQuery';
 import { openDatabase } from '@/services/db/database';
 import {
   createSymptomLog,
@@ -46,7 +47,7 @@ export function useSymptomLogsForDay(localDate: string) {
     },
     enabled: Boolean(userId),
     // Local reads are cheap and always current after an invalidation.
-    staleTime: 0,
+    ...LOCAL_QUERY_OPTIONS,
   });
 }
 

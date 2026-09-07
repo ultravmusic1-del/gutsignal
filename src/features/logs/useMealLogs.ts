@@ -5,6 +5,7 @@ import { resolveTimeZone } from '@/domain/time/occurrence';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
+import { LOCAL_QUERY_OPTIONS } from '@/services/query/localQuery';
 import { openDatabase } from '@/services/db/database';
 import {
   createMeal,
@@ -40,7 +41,7 @@ export function useMealsForDay(localDate: string) {
       return listMealsForLocalDate(db, { userId: userId as string, localDate });
     },
     enabled: Boolean(userId),
-    staleTime: 0,
+    ...LOCAL_QUERY_OPTIONS,
   });
 }
 
@@ -55,7 +56,7 @@ export function useRecentMeals(limit: number = RECENT_MEAL_COUNT) {
       return listRecentMeals(db, { userId: userId as string, limit });
     },
     enabled: Boolean(userId),
-    staleTime: 0,
+    ...LOCAL_QUERY_OPTIONS,
   });
 }
 

@@ -5,6 +5,7 @@ import { buildInsights, type Insights } from '@/domain/patterns/insights';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { todayLocalDate } from '@/features/logs/useSymptomLogs';
 import { openDatabase } from '@/services/db/database';
+import { LOCAL_QUERY_OPTIONS } from '@/services/query/localQuery';
 import { defaultAnalysisRange, loadLogSet } from '@/services/logs/logSetRepository';
 
 /**
@@ -49,6 +50,9 @@ export function useInsights(range?: DateRange) {
     },
 
     enabled: Boolean(userId),
+    ...LOCAL_QUERY_OPTIONS,
+    // Overrides the local default: this is the one local read expensive enough to cache, because
+    // it runs the pattern engine rather than issuing a SELECT.
     staleTime: STALE_TIME_MS,
   });
 }

@@ -8,6 +8,7 @@ import { resolveTimeZone } from '@/domain/time/occurrence';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
+import { LOCAL_QUERY_OPTIONS } from '@/services/query/localQuery';
 import { openDatabase } from '@/services/db/database';
 import { createBowelLog, listBowelLogsForLocalDate } from '@/services/logs/bowelRepository';
 import { createContextLog, listContextLogsForLocalDate } from '@/services/logs/contextRepository';
@@ -38,7 +39,7 @@ function useDayQuery<T>(
     queryKey: userId ? dayLogsQueryKey(kind, userId, localDate) : [kind, 'anonymous', localDate],
     queryFn: async () => read(await openDatabase(), userId as string),
     enabled: Boolean(userId),
-    staleTime: 0,
+    ...LOCAL_QUERY_OPTIONS,
   });
 }
 

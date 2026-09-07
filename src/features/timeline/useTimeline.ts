@@ -4,6 +4,7 @@ import type { LogEntryKind } from '@/domain/logs/entry';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { trackLogDeleted } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
+import { LOCAL_QUERY_OPTIONS } from '@/services/query/localQuery';
 import { openDatabase } from '@/services/db/database';
 import { softDeleteBowelLog } from '@/services/logs/bowelRepository';
 import { softDeleteContextLog } from '@/services/logs/contextRepository';
@@ -55,7 +56,7 @@ export function useTimeline({ kind, search }: { kind: LogEntryKind | null; searc
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: Boolean(userId),
-    staleTime: 0,
+    ...LOCAL_QUERY_OPTIONS,
     select: (data) => data.pages,
   });
 }
@@ -73,7 +74,7 @@ export function useTimelineCount() {
     queryKey: userId ? timelineCountQueryKey(userId) : ['timeline-count', 'anonymous'],
     queryFn: async () => countTimelineEntries(await openDatabase(), userId as string),
     enabled: Boolean(userId),
-    staleTime: 0,
+    ...LOCAL_QUERY_OPTIONS,
   });
 }
 

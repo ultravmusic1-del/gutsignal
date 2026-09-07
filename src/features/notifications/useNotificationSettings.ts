@@ -8,6 +8,7 @@ import {
 import { planReminders, type ReminderPlan } from '@/domain/notifications/schedule';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useProfile } from '@/features/profile/useProfile';
+import { LOCAL_QUERY_OPTIONS } from '@/services/query/localQuery';
 import { openDatabase } from '@/services/db/database';
 import { createExpoNotificationProvider } from '@/services/notifications/expoNotificationProvider';
 import {
@@ -38,9 +39,10 @@ export function useNotificationPermission() {
   return useQuery<NotificationPermission>({
     queryKey: notificationPermissionKey,
     queryFn: () => provider.getPermission(),
-    // The OS setting can change in iOS Settings while the app is backgrounded, so this is never
-    // treated as fresh. It is one cheap native call.
-    staleTime: 0,
+    // Not a database read, but the same rules fit: the OS setting can change in iOS Settings
+    // while the app is backgrounded, so it is never treated as fresh, and a refused permission
+    // check is not worth retrying.
+    ...LOCAL_QUERY_OPTIONS,
   });
 }
 
@@ -59,6 +61,7 @@ export function useNotificationSettings() {
     queryFn: async () =>
       loadNotificationPreferences(await openDatabase(), userId as string, trackingStyle),
     enabled: Boolean(userId),
+    ...LOCAL_QUERY_OPTIONS,
   });
 
   const permission = useNotificationPermission();

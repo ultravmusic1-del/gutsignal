@@ -9,6 +9,7 @@ import type { WellbeingDraft, WellbeingLog } from '@/domain/logs/wellbeing';
 import { resolveTimeZone } from '@/domain/time/occurrence';
 import { trackLogSaved } from '@/features/logs/logAnalytics';
 import { useSync } from '@/features/sync/SyncProvider';
+import { LOCAL_QUERY_OPTIONS } from '@/services/query/localQuery';
 import { openDatabase } from '@/services/db/database';
 import { getBowelLog, updateBowelLog } from '@/services/logs/bowelRepository';
 import { getContextLog, updateContextLog } from '@/services/logs/contextRepository';
@@ -39,7 +40,7 @@ function useEntryQuery<T>(
     queryKey: editQueryKey(kind, id ?? 'new'),
     queryFn: async () => load(await openDatabase(), id as string),
     enabled: Boolean(id),
-    staleTime: 0,
+    ...LOCAL_QUERY_OPTIONS,
   });
 }
 
