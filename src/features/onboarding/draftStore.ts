@@ -17,6 +17,13 @@ import type {
  * Deliberately in memory only. Persisting a partial draft would mean writing answers about
  * symptoms and suspected foods to disk before the user has an account or has agreed to
  * anything — for a few screens of re-typing, that is a bad trade in a health app.
+ *
+ * **This has been proposed once and declined** (2026-09-07), as "onboarding should resume where it
+ * stopped". It is a real annoyance and the fix is genuinely two lines of `zustand/middleware`,
+ * which is exactly why the reasoning is recorded here rather than left to be rediscovered: the
+ * cost is invisible at the call site and the benefit is obvious, so the trade only looks wrong if
+ * you already know what is being written. If it is ever revisited, the thing to change is *when*
+ * consent happens, not whether the draft is persisted.
  */
 
 export type SuspectedFactorDraft = {
